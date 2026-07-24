@@ -372,3 +372,9 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Product pixels render as flat cards (header row + always-visible
   pixel rows) and Other pixels is its own headed section - no more
   expand/collapse hiding the detail.
+
+## v0.11.5
+- Consent setup pricing copy rewritten to cover both client paths:
+  CMP sites get the GTM procedure applied and verified; no-CMP sites
+  get a documented findings package for the banner conversation. The
+  fee is justified by the onboarding audit every client receives.
