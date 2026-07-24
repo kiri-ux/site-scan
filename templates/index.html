@@ -210,6 +210,8 @@
   .empty{color:var(--muted);font-size:14px;text-align:center;padding:30px 0}
   .results-tools{display:none;justify-content:flex-end;margin-bottom:14px}
   @media (max-width:640px){ .link{min-width:46%} header{flex-wrap:wrap} }
+  #tipbox{position:fixed;z-index:9999;max-width:340px;background:var(--atlas);color:#F4F8FB;border-radius:8px;padding:10px 13px;font:13px/1.5 'Barlow',sans-serif;box-shadow:0 6px 24px rgba(0,45,88,.35);pointer-events:none;opacity:0;transition:opacity .12s;border-top:3px solid var(--gold)}
+  #tipbox.on{opacity:1}
 </style>
 </head>
 <body>
@@ -833,6 +835,37 @@ renderChips();
 renderStateChips();
 restoreResults();
 loadSchedule();
+</script>
+<div id="tipbox" role="tooltip"></div>
+<script>
+(function(){
+  const box = document.getElementById('tipbox');
+  let cur = null;
+  function show(el){
+    const t = el.getAttribute('data-tip');
+    if (!t) return;
+    cur = el;
+    box.textContent = t;
+    box.classList.add('on');
+    const r = el.getBoundingClientRect();
+    box.style.left = '0px'; box.style.top = '0px';
+    const bw = box.offsetWidth, bh = box.offsetHeight;
+    let x = r.left + r.width/2 - bw/2;
+    x = Math.max(8, Math.min(x, window.innerWidth - bw - 8));
+    let y = r.bottom + 8;
+    if (y + bh > window.innerHeight - 8) y = r.top - bh - 8;
+    box.style.left = x + 'px'; box.style.top = Math.max(8, y) + 'px';
+  }
+  function hide(){ cur = null; box.classList.remove('on'); }
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-tip]');
+    if (el) show(el); else if (cur) hide();
+  });
+  document.addEventListener('mouseout', e => {
+    if (cur && !e.relatedTarget?.closest?.('[data-tip]')) hide();
+  });
+  document.addEventListener('scroll', hide, true);
+})();
 </script>
 </body>
 </html>

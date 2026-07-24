@@ -1,3 +1,23 @@
+const TIPS = {
+  'not seen': 'No request matching this pixel was observed on this page, before or after consent. From outside we cannot tell not-installed from blocked - it may also fire only on specific pages or events (a thank-you page, a form submit). The GTM config audit is what settles it.',
+  'pre-consent only': 'Fired before any consent interaction and never in a consent-gated window. On a page with a banner this pixel is jumping it; on a no-CMP page it simply runs unrestricted. Either way: working, but not consent-gated.',
+  'pre + post': 'Fired both before AND after Accept. The post-consent fire is fine - the pre-consent fire is the problem half, since it ran before the visitor agreed.',
+  'post-consent': 'Fired only after Accept was clicked - correctly consent-gated. This is the target state for every tracking pixel.',
+  'firing': 'Every expected pixel for this product was observed on this page.',
+  'partial': 'Some of this product\u2019s expected pixels were observed, others were not - check each row below.',
+  'missing': 'None of this product\u2019s expected pixels were observed on this page, before or after consent.',
+  'ungated': 'This tracker runs with no consent mechanism on the page at all. The finding is the missing CMP - the site-level condition - not a fault of this individual tag.',
+  'violation': 'Fired before consent on a page that HAS a consent banner - it is bypassing the CMP. This is the pattern consent litigation targets.',
+  'after-reject': 'Fired after the visitor explicitly clicked Reject/Decline. Continuing to track after an explicit no is the highest-risk behavior the scanner checks for.',
+  'defaults': 'Google Consent Mode defaults found in this page\u2019s GTM/gtag setup. denied means each storage type starts blocked until the visitor consents, so Google tags run cookieless until Accept - this is exactly the end-state the GTM consent procedure installs.',
+  'cmp-evidence': 'How this CMP was identified: the network requests, script domains, JS globals, or cookies observed on the page that match its signature.',
+  'pixels missing': 'One or more selected products had no pixels observed on this page - see the Product pixels section.',
+  'pre-consent fires': 'Trackers fired before consent on a page that has a consent banner - see Other pixels and the product rows.',
+  'fires after reject': 'Trackers fired after Reject was clicked - see Requests after Reject.',
+  'scan error': 'This page could not be fully scanned - the result may be incomplete. Re-run after checking the URL.',
+};
+function tipAttr(key){ const t = TIPS[key]; return t ? ` data-tip="${t.replace(/"/g,'&quot;')}"` : ''; }
+
 // Shared rendering for scan results (index + share pages).
 const $ = id => document.getElementById(id);
 function normUrl(u){
@@ -27,7 +47,7 @@ const CHAIN_TIPS = {
 
 function chainLink(k, v, state){
   const tip = (CHAIN_TIPS[k] || '').replace(/"/g, '&quot;');
-  return `<div class="link ${state}" title="${tip}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  return `<div class="link ${state}" data-tip="${tip}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
 function stateChecksHtml(r){
   if (!(r.state_checks || []).length) return '';
@@ -93,27 +113,27 @@ function renderSite(r, i){
   if (r.gtm && r.gtm.found) kvBits.push(`<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ') || 'present'}</b></span>`);
   if (gtmEvent) kvBits.push(`<span class="kv">Trigger event: <span class="pill">${gtmEvent}</span></span>`);
   const defaults = Object.entries(r.consent_defaults || {});
-  if (defaults.length) kvBits.push(`<span class="kv">Defaults: <b>${defaults.map(([k,v])=>`${k}=${v}`).join(', ')}</b></span>`);
+  if (defaults.length) kvBits.push(`<span class="kv"${tipAttr('defaults')}>Defaults: <b>${defaults.map(([k,v])=>`${k}=${v}`).join(', ')}</b></span>`);
 
   const cmpDetail = r.cmps.length ? `<h3>CMP evidence</h3><ul>` + r.cmps.map(c =>
-      `<li><div><b>${c.name}</b> <span class="evidence">${(c.evidence||[]).join(' &middot; ')}</span>
+      `<li><div><b>${c.name}</b> <span class="evidence"${tipAttr('cmp-evidence')}>${(c.evidence||[]).join(' &middot; ')}</span>
         ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}</div></li>`).join('') + `</ul>` : '';
 
   const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
   const fires = r.pre_consent.length ? `<h3>Other pixels${preViol ? ` <span class="badge bad">${preViol} pre-consent</span>` : ''}</h3><ul>` + r.pre_consent.map(h =>
-      `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='ungated' ? ' title="This tracker runs with no consent mechanism on the page at all. The finding is the missing CMP - the site-level condition - not a fault of this individual tag."' : ''}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
+      `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='ungated' ? tipAttr('ungated') : h.severity==='violation' ? tipAttr('violation') : ''}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
         <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Other pixels</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
   const pxBadge = px => !px.fired_pre && !px.fired_post
-        ? '<span class="badge bad">not firing</span>'
+        ? `<span class="badge bad"${tipAttr('not seen')}>not seen</span>`
         : px.fired_pre && !px.fired_post
-        ? '<span class="badge warn" title="Fired before any consent interaction and never in a consent-gated window. On a page with a banner this pixel is jumping it; on a no-CMP page it simply runs unrestricted. Either way: working, but not consent-gated.">pre-consent only</span>'
-        : '<span class="badge ok">' + (px.fired_pre ? 'pre + post' : 'post-consent') + '</span>';
+        ? `<span class="badge warn"${tipAttr('pre-consent only')}>pre-consent only</span>`
+        : (px.fired_pre ? `<span class="badge ok"${tipAttr('pre + post')}>pre + post</span>` : `<span class="badge ok"${tipAttr('post-consent')}>post-consent</span>`);
   const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>Product pixels</h3>` + (prods.length ? prods.map(p => {
-      const stateBadge = p.fired === 0 ? '<span class="badge bad">missing</span>'
-                       : p.fired < p.expected ? '<span class="badge warn">partial</span>'
-                       : '<span class="badge ok">firing</span>';
+      const stateBadge = p.fired === 0 ? `<span class="badge bad"${tipAttr('missing')}>missing</span>`
+                       : p.fired < p.expected ? `<span class="badge warn"${tipAttr('partial')}>partial</span>`
+                       : `<span class="badge ok"${tipAttr('firing')}>firing</span>`;
       const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected} firing</span>` : '';
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
@@ -128,15 +148,15 @@ function renderSite(r, i){
     : (r.reject_tested ? `<h3>Requests after Reject</h3><p class="kv">No trackers fired after Reject - the decline path is honored.</p>` : '');
 
   const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>
-      `<li><span class="badge ok">post-consent</span><div><b>${h.vendor}</b><div class="u">${h.url}</div></div></li>`).join('') + `</ul>` : '';
+      `<li><span class="badge ok"${tipAttr('post-consent')}>post-consent</span><div><b>${h.vendor}</b><div class="u">${h.url}</div></div></li>`).join('') + `</ul>` : '';
 
   const missingProds = prods.filter(p => p.fired === 0);
   const rejV = (r.post_reject || []).some(h => h.severity === 'violation');
   const headBadges = [
-    rejV ? '<span class="badge bad">fires after reject</span>' : '',
-    r.verdict === 'misconfigured' && !rejV ? '<span class="badge bad">pre-consent fires</span>' : '',
-    missingProds.length ? '<span class="badge bad">pixels missing</span>' : '',
-    r.verdict === 'error' ? '<span class="badge warn">scan error</span>' : '',
+    rejV ? `<span class="badge bad"${tipAttr('fires after reject')}>fires after reject</span>` : '',
+    r.verdict === 'misconfigured' && !rejV ? `<span class="badge bad"${tipAttr('pre-consent fires')}>pre-consent fires</span>` : '',
+    missingProds.length ? `<span class="badge bad"${tipAttr('pixels missing')}>pixels missing</span>` : '',
+    r.verdict === 'error' ? `<span class="badge warn"${tipAttr('scan error')}>scan error</span>` : '',
     r.mode !== 'full' ? `<span class="badge neutral">${r.mode}</span>` : '',
   ].join('');
   const prodStat = prods.map(p => {

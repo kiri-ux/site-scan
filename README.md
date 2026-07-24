@@ -464,3 +464,12 @@ banner visibility, Consent Mode, or pre-consent fires.
   case: vendor identified, banner clearly on screen, selectors blind).
 - Starting a new scan no longer hides previous runs - history stays
   on screen and the new run inserts at the top.
+
+## v0.12.13
+- Vici-styled tooltips replace the browser-native ones everywhere:
+  instant, branded (atlas panel, gold rule), positioned and clamped.
+  Definitions added for every badge type (not seen, pre-consent only,
+  pre+post, post-consent, firing/partial/missing, ungated, violation,
+  after-reject, and the head badges), plus explainers on the Consent
+  Mode Defaults line and CMP identification evidence. "not firing"
+  renamed "not seen" - the check-based accurate claim.
