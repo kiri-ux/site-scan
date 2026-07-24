@@ -358,3 +358,9 @@ banner visibility, Consent Mode, or pre-consent fires.
   target tags from the main site.
 - Page rows no longer repeat the chain and verdict - the client
   summary owns them. Error/basic pages keep their message box.
+
+## v0.11.3
+- New gold "Build vs market" tab inside the app: the full capability
+  matrix vs Code-Cube / Lokker / ObservePoint / ConsentPixel / CMPs,
+  the price ladder, proposed pricing cards, rationale, and open
+  decisions - the internal one-pager, always one click away.

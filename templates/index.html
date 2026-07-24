@@ -26,6 +26,49 @@
   .tabs{max-width:1100px;margin:0 auto;padding:14px 20px 0;display:flex;gap:6px}
   .tab{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;letter-spacing:.05em;text-transform:uppercase;background:none;border:none;border-bottom:3px solid transparent;color:var(--muted);padding:8px 14px;border-radius:0;cursor:pointer}
   .tab.on{color:var(--atlas);border-bottom-color:var(--gold)}
+  .tab.gold{color:#8A6A10}
+  .tab.gold.on{color:#8A6A10;border-bottom-color:var(--gold);background:#FBF3DC;border-radius:6px 6px 0 0}
+  #view-market{display:none}
+  .mkt h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:19px;letter-spacing:.05em;text-transform:uppercase;color:var(--atlas);border-bottom:2px solid var(--gold);padding-bottom:6px;margin:26px 0 12px}
+  .mkt h2:first-child{margin-top:4px}
+  .mkt table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);font-size:13px}
+  .mkt th,.mkt td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:center;vertical-align:middle}
+  .mkt th{font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.05em;text-transform:uppercase;font-size:12.5px;background:#F2F4F1;color:var(--atlas)}
+  .mkt td:first-child,.mkt th:first-child{text-align:left;font-weight:500}
+  .mkt th.vici{background:var(--velocity);color:#fff}
+  .mkt td.vici{background:#EAF3FB;border-left:2px solid var(--velocity);border-right:2px solid var(--velocity)}
+  .mkt .yes{color:var(--ok);font-weight:700}
+  .mkt .no{color:#B4BCC6}
+  .mkt .part{color:var(--warn);font-weight:600;font-size:12px}
+  .mkt .only{display:inline-block;background:var(--gold);color:var(--atlas);font-size:11px;font-weight:700;border-radius:4px;padding:1px 7px;letter-spacing:.04em}
+  .mkt tr.price td{background:#F7F8F6;font-weight:600;font-size:12px}
+  .mkt .ladder{background:var(--card);border:1px solid var(--line);padding:18px 20px 8px;margin-top:8px}
+  .mkt .lrow{display:flex;align-items:center;gap:12px;margin-bottom:11px}
+  .mkt .lname{width:110px;font-weight:600;font-size:13.5px;flex:none}
+  .mkt .ltrack{flex:1;position:relative;height:20px;background:#F0F2EF;border-radius:4px}
+  .mkt .lbar{position:absolute;top:2px;bottom:2px;border-radius:3px;background:#8FA0AF}
+  .mkt .lbar.quote{background:#B65A3C}
+  .mkt .lbar.vgold{background:var(--gold);border:1px solid #C79020}
+  .mkt .lbar span{position:absolute;left:6px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:600;color:#fff;white-space:nowrap}
+  .mkt .lbar.vgold span{color:var(--atlas)}
+  .mkt .lscale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin:2px 0 10px 122px}
+  .mkt .lnote{font-size:12px;color:var(--muted);padding:4px 0 10px}
+  .mkt .cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .mkt .cardp{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .mkt .cardp.core{border:2px solid var(--velocity)}
+  .mkt .tagc{display:inline-block;background:#EAF3FB;color:var(--velocity);font-size:11.5px;font-weight:700;border-radius:4px;padding:2px 9px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px}
+  .mkt .k{font-size:13px;color:var(--muted)}
+  .mkt .priceN{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:30px;color:var(--atlas);margin:2px 0}
+  .mkt .per{font-size:12px;color:var(--muted);margin-bottom:8px}
+  .mkt .cardp p{font-size:13px}
+  .mkt .anchors{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .mkt .anchors span{background:#F0F2EF;border-radius:6px;padding:5px 11px;font-size:12.5px;color:var(--muted)}
+  .mkt .cols2{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+  .mkt ul,.mkt ol{padding-left:20px}
+  .mkt li{margin-bottom:7px;font-size:13.5px}
+  .mkt li b{color:var(--atlas)}
+  .mkt .footn{margin-top:26px;border-top:1px solid var(--line);padding-top:12px;font-size:11.5px;color:var(--muted);line-height:1.6}
+  @media (max-width:900px){.mkt .cards3,.mkt .cols2{grid-template-columns:1fr}}
   main{max-width:1100px;margin:0 auto;padding:20px 20px 80px}
   .link{cursor:help}
 
@@ -164,6 +207,7 @@
 <nav class="tabs">
   <button class="tab on" id="tab-scan" onclick="showTab('scan')">Scan</button>
   <button class="tab" id="tab-recurring" onclick="showTab('recurring')">Recurring scans</button>
+  <button class="tab gold" id="tab-market" onclick="showTab('market')">Build vs market</button>
 </nav>
 
 <main>
@@ -206,7 +250,69 @@
   <p class="empty" id="empty">Results appear here. Each site gets a consent chain: CMP &rarr; banner &rarr; Consent Mode &rarr; pre-consent fires.</p>
   </div>
 
-  <div id="view-recurring" style="display:none">
+  <div id="view-market" class="mkt">
+<h2>What we include vs the competition</h2>
+<table>
+  <tr><th>Capability</th><th class="vici">Vici Scanner</th><th>Code-Cube</th><th>Lokker</th><th>ObservePoint</th><th>ConsentPixel</th><th>CMPs (iubenda / Usercentrics)</th></tr>
+  <tr><td>CMP detection + GTM trigger mapping (14 CMPs)</td><td class="vici yes">&#10003;</td><td class="part">partial</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">own banner only</td></tr>
+  <tr><td>Pre-consent pixel capture (headless browser)</td><td class="vici yes">&#10003;</td><td class="part">flags only</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">basic scan</td></tr>
+  <tr><td>Accept-path simulation (clicks the banner)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">limited</td><td class="no">&mdash;</td></tr>
+  <tr><td>Reject-path test (fires after user says no?)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
+  <tr><td>GPC signal test (12 states now require honoring)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="part">config</td><td class="no">&mdash;</td><td class="part">honor, don't test</td></tr>
+  <tr><td>State-law check map with citations (20 states)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
+  <tr><td>Vici product verification (BARCK+ 5/5, Meta, Mobile&hellip;)</td><td class="vici"><span class="only">Only us</span></td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
+  <tr><td>Unfilled trafficking macro detection ([ORDER])</td><td class="vici"><span class="only">Only us</span></td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="part">rules</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
+  <tr><td>Scheduled scans + alerting</td><td class="vici yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">policy alerts</td></tr>
+  <tr><td>Shareable read-only client reports</td><td class="vici yes">&#10003;</td><td class="part">portal</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">white-label</td><td class="no">&mdash;</td></tr>
+  <tr><td>Real-user monitoring on live traffic</td><td class="vici no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">add-on</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
+  <tr><td>Full journey simulation (cart, checkout)</td><td class="vici no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
+  <tr><td>Network-layer blocking / enforcement</td><td class="vici no">&mdash;</td><td class="no">&mdash;</td><td class="yes">Guardian</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="part">tag blocking</td></tr>
+  <tr><td>Third-party attestation + vendor E&amp;O</td><td class="vici no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
+  <tr class="price"><td>Pricing (per site / month unless noted)</td><td class="vici">$30&ndash;50 wholesale<br>$99&ndash;149 retail (proposed)</td><td>&euro;99&ndash;600<br>(entry: 1 domain, 1 scan/day)</td><td>Quote-only<br>(CMP requires Privacy Edge)</td><td>Enterprise quote</td><td>Agencies resell at $50&ndash;100</td><td>$6&ndash;100 / ~&euro;60+</td></tr>
+</table>
+
+<h2>Price ladder</h2>
+<div class="ladder">
+  <div class="lrow"><div class="lname">iubenda</div><div class="ltrack"><div class="lbar" style="left:1%;width:16%"><span>$6&ndash;100</span></div></div></div>
+  <div class="lrow"><div class="lname">Usercentrics</div><div class="ltrack"><div class="lbar" style="left:10%;width:18%"><span>~&euro;60+</span></div></div></div>
+  <div class="lrow"><div class="lname">ConsentPixel</div><div class="ltrack"><div class="lbar" style="left:8%;width:16%"><span>$50&ndash;100 resale</span></div></div></div>
+  <div class="lrow"><div class="lname">Code-Cube</div><div class="ltrack"><div class="lbar" style="left:16%;width:66%"><span>&euro;99&ndash;600</span></div></div></div>
+  <div class="lrow"><div class="lname">Lokker</div><div class="ltrack"><div class="lbar quote" style="left:52%;width:40%"><span>quote-only</span></div></div></div>
+  <div class="lrow"><div class="lname">ObservePoint</div><div class="ltrack"><div class="lbar quote" style="left:66%;width:30%"><span>enterprise</span></div></div></div>
+  <div class="lrow"><div class="lname"><b>Vici Scanner</b></div><div class="ltrack"><div class="lbar vgold" style="left:5%;width:8%"><span>$30&ndash;50</span></div><div class="lbar vgold" style="left:16%;width:9%"><span>$99&ndash;149</span></div></div></div>
+  <div class="lscale"><span>$0</span><span>$100</span><span>$300</span><span>$600+</span></div>
+  <div class="lnote">Gold = proposed Vici pricing (wholesale &rarr; suggested retail). Rust = quote-only enterprise tiers. Approximate; Code-Cube in EUR.</div>
+</div>
+
+<h2>Proposed pricing</h2>
+<div class="cards3">
+  <div class="cardp"><div class="k">Consent setup</div><div class="priceN">$250&ndash;500</div><div class="per">one-time, per client</div><p>Buyer applies the GTM consent procedure. Before/after scan pair is the proof of work. GTM API automation (next build) makes this fee mostly margin.</p></div>
+  <div class="cardp core"><div class="tagc">Core offer</div><div class="k">Monitoring, wholesale</div><div class="priceN">$30&ndash;50</div><div class="per">per site / month, to agency partners</div><p>Daily scans; consent, reject, and GPC checks; state-law flags; product pixel health; alerts; share links.</p></div>
+  <div class="cardp"><div class="k">Suggested retail</div><div class="priceN">$99&ndash;149</div><div class="per">per site / month, partner to client</div><p>Priced like insurance reads credible at $99; at $29 it reads like a plugin. Matches Code-Cube's entry with far more included.</p></div>
+</div>
+<div class="anchors"><span>Market anchor: agencies charge $50&ndash;100/mo (ConsentPixel)</span><span>CMPs alone: $10&ndash;50/mo</span><span>Lokker tier: hundreds/property</span><span>Our infra cost: ~$50/mo total</span></div>
+
+<div class="cols2">
+  <div><h2>Rationale</h2><ul>
+    <li><b>Above bare CMPs, below Lokker</b> &mdash; exactly what the feature set is.</li>
+    <li><b>Nobody else knows what BARCK+ is</b> &mdash; the product layer is unpriced anywhere.</li>
+    <li><b>$99&ndash;149 matches Code-Cube's entry tier</b> (1 domain, 1 scan/day, no consent testing, no products).</li>
+    <li><b>Consider free monitoring above a spend threshold</b> &mdash; protects Vici's campaign data anyway.</li>
+    <li><b>100 sites &times; $40 &asymp; $4K/mo vs ~$50 infra</b> &mdash; legal paperwork before the first invoice.</li>
+    <li><b>Lokker / ObservePoint aren't price competitors</b> &mdash; they're the attestation layer to add later.</li>
+  </ul></div>
+  <div><h2>Open decisions</h2><ol>
+    <li><b>Price point</b> &mdash; pick within the ranges.</li>
+    <li><b>Bundle vs. add-on</b> &mdash; free above spend threshold, or always billed?</li>
+    <li><b>Legal gate</b> &mdash; counsel-reviewed ToS + E&amp;O before client-facing; check-based language throughout.</li>
+    <li><b>Vendor layer</b> &mdash; Lokker as attestation for paying accounts, or self-serve only?</li>
+    <li><b>Next build</b> &mdash; GTM API config audit (Cloud project + Tag Manager API + OAuth).</li>
+  </ol></div>
+</div>
+<div class="footn">Internal draft &mdash; not legal or financial advice. Competitor pricing from public sources, July 2026. Capability ratings reflect Vici's use case, not a general product review. Scanner reports use check-based language and never assert legal compliance.</div>
+</div>
+
+<div id="view-recurring" style="display:none">
   <section class="panel" id="sched-panel">
     <h2>Recurring scans</h2>
     <p class="hint" style="margin:0 0 12px">These sites run automatically on the scheduled cron job. Daily sites run every day; weekly sites run Mondays; off pauses a site without removing it. Add clients from the Scan tab with the "Add to recurring" button; Edit loads a client back into the form.</p>
@@ -321,8 +427,10 @@ async function restoreResults(){
 function showTab(which){
   $('view-scan').style.display = which === 'scan' ? 'block' : 'none';
   $('view-recurring').style.display = which === 'recurring' ? 'block' : 'none';
+  $('view-market').style.display = which === 'market' ? 'block' : 'none';
   $('tab-scan').classList.toggle('on', which === 'scan');
   $('tab-recurring').classList.toggle('on', which === 'recurring');
+  $('tab-market').classList.toggle('on', which === 'market');
 }
 
 let schedSites = [];
