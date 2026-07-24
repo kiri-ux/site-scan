@@ -80,6 +80,24 @@ def recent_scans(limit=200):
         return out
 
 
+def scans_for_run(run_id):
+    if not enabled():
+        return []
+    with _conn() as cn, cn.cursor() as cur:
+        cur.execute("""
+            SELECT id, result, to_char(scanned_at AT TIME ZONE 'UTC',
+                                       'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+            FROM scans WHERE result->>'run_id' = %s
+            ORDER BY scanned_at ASC""", (run_id,))
+        out = []
+        for sid, result, iso in cur.fetchall():
+            r = result if isinstance(result, dict) else json.loads(result)
+            r["_id"] = sid
+            r["scanned_at_iso"] = iso
+            out.append(r)
+        return out
+
+
 def delete_scans(ids):
     ids = [int(i) for i in ids]
     if not ids:

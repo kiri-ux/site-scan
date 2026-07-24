@@ -118,6 +118,20 @@ def remove_site():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.get("/run/<run_id>")
+def share_run(run_id):
+    return render_template("share.html", run_id=run_id)
+
+
+@app.get("/api/run/<run_id>")
+def api_run(run_id):
+    try:
+        return jsonify({"results": db.scans_for_run(run_id)})
+    except Exception as e:
+        print(f"api_run failed: {e}")
+        return jsonify({"results": []})
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "build": BUILD, "db": db.enabled()}

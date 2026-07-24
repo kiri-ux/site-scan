@@ -206,3 +206,12 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Conversion URLs input converted to pills: type or paste (multi-line
   paste splits automatically), Enter to add, x or Backspace to remove.
   Duplicates of the main site or each other are rejected at entry.
+
+## v0.9.4 - shareable scan links
+- Share button on each run copies a read-only link (/run/<run_id>)
+  showing only that client's scan: no tabs, inputs, schedule, or other
+  clients' data. Includes an automated-scan scope footnote per the
+  liability discussion. Rendering code moved to static/render.js,
+  shared by both pages.
+- Links are unauthenticated (like the app itself) - treat them as
+  "anyone with the link" until a password gate is added.

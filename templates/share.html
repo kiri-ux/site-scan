@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consent Scan</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --atlas:#002D58; --velocity:#0066B3; --gold:#F1B434; --parchment:#FDFBF7;
+    --ink:#16283B; --muted:#5B6B7C; --line:#D9DFE6; --card:#FFFFFF;
+    --ok:#1F7A4D; --ok-bg:#E7F4ED; --warn:#9A6A00; --warn-bg:#FBF1D9;
+    --bad:#B3261E; --bad-bg:#F9E7E5; --info-bg:#E8F1F8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Barlow',sans-serif;background:var(--parchment);color:var(--ink);min-height:100vh}
+  header{background:var(--atlas);color:#fff;padding:20px 28px;display:flex;align-items:baseline;gap:14px;border-bottom:4px solid var(--gold)}
+  header h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;letter-spacing:.04em;text-transform:uppercase}
+  header .sub{font-size:13px;color:#B9C6D4}
+  main{max-width:1100px;margin:0 auto;padding:28px 20px 80px}
+  .rg-title{display:flex;align-items:baseline;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+  .rg-title h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:24px;letter-spacing:.03em;color:var(--atlas)}
+  .rg-title .when{font-size:13px;color:var(--muted)}
+  .badge{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;border-radius:5px;padding:3px 9px;white-space:nowrap}
+  .badge.ok{background:var(--ok-bg);color:var(--ok)}
+  .badge.warn{background:var(--warn-bg);color:var(--warn)}
+  .badge.bad{background:var(--bad-bg);color:var(--bad)}
+  .badge.neutral{background:var(--info-bg);color:var(--velocity)}
+  .site{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .site-head{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer}
+  .site-head:hover{background:#FAFAF7}
+  .site-url{font-weight:600;font-size:15px;word-break:break-all}
+  .cmp-name{font-size:13px;color:var(--muted);white-space:nowrap}
+  .caret{color:var(--muted);transition:transform .2s;font-size:12px}
+  .scanned{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+  .site.open .caret{transform:rotate(90deg)}
+  .site-body{display:none;border-top:1px solid var(--line);padding:18px}
+  .site.open .site-body{display:block}
+  .chain{display:flex;gap:0;margin:4px 0 18px;flex-wrap:wrap}
+  .link{flex:1;min-width:150px;position:relative;padding:12px 14px 12px 22px;background:#F5F6F4;border:1px solid var(--line);border-left:none;cursor:help}
+  .link:first-child{border-left:1px solid var(--line);border-radius:8px 0 0 8px;padding-left:14px}
+  .link:last-child{border-radius:0 8px 8px 0}
+  .link::after{content:"";position:absolute;right:-9px;top:50%;transform:translateY(-50%) rotate(45deg);width:16px;height:16px;background:inherit;border-top:1px solid var(--line);border-right:1px solid var(--line);z-index:1}
+  .link:last-child::after{display:none}
+  .link .k{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+  .link .v{font-size:14.5px;font-weight:600;margin-top:3px}
+  .link.pass{background:var(--ok-bg)} .link.pass .v{color:var(--ok)}
+  .link.fail{background:var(--bad-bg)} .link.fail .v{color:var(--bad)}
+  .link.mid{background:var(--warn-bg)} .link.mid .v{color:var(--warn)}
+  .verdict{font-size:14px;line-height:1.55;padding:12px 14px;border-radius:8px;margin-bottom:16px}
+  .verdict.ok{background:var(--ok-bg)} .verdict.bad{background:var(--bad-bg)}
+  .verdict.warn{background:var(--warn-bg)} .verdict.neutral{background:var(--info-bg)}
+  .verdict .vline{padding:2px 0}
+  .verdict .vline + .vline{border-top:1px dashed rgba(0,0,0,.08)}
+  .detail h3{font-family:'Barlow Condensed',sans-serif;font-size:13.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--atlas);margin:14px 0 6px}
+  .detail ul{list-style:none}
+  .detail li{font-size:13.5px;padding:7px 0;border-bottom:1px dashed var(--line);display:flex;gap:10px;align-items:baseline}
+  .detail li:last-child{border-bottom:none}
+  .detail .u{color:var(--muted);font-size:12px;word-break:break-all}
+  .evidence{font-size:12.5px;color:var(--muted)}
+  .pill{display:inline-block;background:var(--info-bg);color:var(--velocity);border-radius:4px;font-size:12px;font-weight:600;padding:2px 8px}
+  .kv{font-size:13.5px;color:var(--muted)}
+  .kv b{color:var(--ink)}
+  .pstat{font-size:12.5px;font-weight:600;white-space:nowrap;border-radius:4px;padding:2px 7px}
+  .pstat.ok{background:var(--ok-bg);color:var(--ok)}
+  .pstat.warn{background:var(--warn-bg);color:var(--warn)}
+  .pstat.bad{background:var(--bad-bg);color:var(--bad)}
+  details.prod{margin:0 0 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  details.prod summary{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;list-style:none;font-size:14px}
+  details.prod summary::-webkit-details-marker{display:none}
+  details.prod summary .caret{margin-left:auto}
+  details.prod[open] summary .caret{transform:rotate(90deg)}
+  details.prod ul{padding:4px 12px 8px}
+  .macro-warn{color:var(--warn);font-size:12.5px}
+  .empty{color:var(--muted);font-size:14px;text-align:center;padding:60px 0}
+  .footnote{font-size:12px;color:var(--muted);margin-top:24px;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <h1>Consent Scan</h1>
+  <span class="sub">read-only scan report</span>
+</header>
+<main>
+  <div class="rg-title" id="title" style="display:none">
+    <span id="t-badge"></span>
+    <h2 id="t-name"></h2>
+    <span class="when" id="t-when"></span>
+  </div>
+  <div id="pages"></div>
+  <p class="empty" id="loading">Loading scan&hellip;</p>
+  <p class="footnote" id="footnote" style="display:none">Automated technical scan of the listed pages at the time shown. Checks reflect load-time behavior of the scanned pages only. Absence of flags is not a determination of legal compliance.</p>
+</main>
+<script src="/static/render.js"></script>
+<script>
+const RUN_ID = {{ run_id | tojson }};
+(async function(){
+  try {
+    const d = await (await fetch(`/api/run/${encodeURIComponent(RUN_ID)}`)).json();
+    const items = (d.results || []).map((r, i) => {
+      if (r.scanned_at_iso) r.scanned_local = new Date(r.scanned_at_iso).toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
+      return {r, i};
+    });
+    if (!items.length){
+      $('loading').textContent = 'Scan not found - it may have been deleted.';
+      return;
+    }
+    const g = {items, name: items.map(x => x.r.client_name).find(Boolean) || ''};
+    const main = mainItem(g);
+    $('t-badge').outerHTML = groupBadge(items);
+    $('t-name').textContent = g.name || main.r.url;
+    $('t-when').textContent = `${items.length} page${items.length>1?'s':''} \u00b7 ${main.r.scanned_local || ''}`;
+    $('title').style.display = 'flex';
+    $('pages').innerHTML = items.map(({r, i}) => renderSite(r, i)).join('');
+    document.querySelector('.site')?.classList.add('open');
+    $('loading').style.display = 'none';
+    $('footnote').style.display = 'block';
+  } catch(e){
+    $('loading').textContent = 'Could not load this scan.';
+  }
+})();
+</script>
+</body>
+</html>
