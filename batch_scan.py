@@ -146,16 +146,24 @@ def main():
 
     print(f"Scanning {len(sites)} sites...")
     results = []
-    for s, prods, name in sites:
+    workers = max(1, min(int(os.environ.get("SCAN_CONCURRENCY", "2")), 4))
+
+    def _one(job):
+        s, prods, name = job
         r = scan_site(s, prefer_full=True, products=prods)
         r["client_name"] = name
-        results.append(r)
-        if r["ok"]:
-            try:
-                db.save_scan(r)
-            except Exception as e:
-                print(f"  (could not save to history: {e})")
-        print(f"  [{r['verdict']}] {r['url']}")
+        return r
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for r in pool.map(_one, sites):
+            results.append(r)
+            if r["ok"]:
+                try:
+                    db.save_scan(r)
+                except Exception as e:
+                    print(f"  (could not save to history: {e})")
+            print(f"  [{r['verdict']}] {r['url']}")
 
     buf = io.StringIO()
     csv.writer(buf).writerows(to_rows(results))

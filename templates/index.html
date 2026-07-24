@@ -23,7 +23,11 @@
   header .sub{font-size:13px;color:#B9C6D4}
   header .build{margin-left:auto;font-size:11px;color:#7E93A8;letter-spacing:.06em}
 
-  main{max-width:1100px;margin:0 auto;padding:28px 20px 80px}
+  .tabs{max-width:1100px;margin:0 auto;padding:14px 20px 0;display:flex;gap:6px}
+  .tab{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;letter-spacing:.05em;text-transform:uppercase;background:none;border:none;border-bottom:3px solid transparent;color:var(--muted);padding:8px 14px;border-radius:0;cursor:pointer}
+  .tab.on{color:var(--atlas);border-bottom-color:var(--gold)}
+  main{max-width:1100px;margin:0 auto;padding:20px 20px 80px}
+  .link{cursor:help}
 
   .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:22px}
   .panel h2{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--atlas);margin-bottom:12px}
@@ -142,7 +146,13 @@
   <span class="build">BUILD {{ build }} &middot; DEPLOYED {{ deployed }}</span>
 </header>
 
+<nav class="tabs">
+  <button class="tab on" id="tab-scan" onclick="showTab('scan')">Scan</button>
+  <button class="tab" id="tab-recurring" onclick="showTab('recurring')">Recurring scans</button>
+</nav>
+
 <main>
+  <div id="view-scan">
   <section class="panel">
     <h2>Scan a client</h2>
     <label class="field-label" for="client-name">Client name</label>
@@ -159,6 +169,12 @@
       <button class="btn-ghost" id="csv" disabled>Download CSV</button>
       <button class="btn-ghost" id="clear" disabled>Clear results</button>
       <label class="chk"><input type="checkbox" id="fullmode" checked> Full scan (headless browser)</label>
+      <span style="flex:1"></span>
+      <select id="sched-freq" class="freq-select" title="Frequency for recurring scans">
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+      </select>
+      <button class="btn-ghost" id="sched-add" style="display:none" title="Save this client (name, site, conversion URLs, products) to the recurring scan schedule">Add to recurring</button>
     </div>
     <div class="progress" id="progress">
       <span id="progress-label">Scanning&hellip;</span>
@@ -167,23 +183,18 @@
     </div>
   </section>
 
-  <section class="panel" id="sched-panel" style="display:none">
-    <h2>Recurring scans</h2>
-    <p class="hint" style="margin:0 0 12px">These sites run automatically on the scheduled cron job. Daily sites run every day; weekly sites run Mondays; off pauses a site without removing it. The products and conversion URLs entered above are saved with the site when you add it; the checkbox controls whether recurring runs also scan the conversion URLs.</p>
-    <div class="row" style="margin:0 0 12px">
-      <input id="sched-url" type="text" placeholder="clientsite.com" style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font:14px 'Barlow',sans-serif;background:#FCFCFB">
-      <select id="sched-freq" class="freq-select">
-        <option value="daily">Daily</option>
-        <option value="weekly">Weekly</option>
-      </select>
-      <button class="btn-primary" id="sched-add">Add site</button>
-    </div>
-    <div id="sched-list"></div>
-  </section>
-
   <div class="results-tools" id="results-tools"></div>
   <section id="results"></section>
   <p class="empty" id="empty">Results appear here. Each site gets a consent chain: CMP &rarr; banner &rarr; Consent Mode &rarr; pre-consent fires.</p>
+  </div>
+
+  <div id="view-recurring" style="display:none">
+  <section class="panel" id="sched-panel">
+    <h2>Recurring scans</h2>
+    <p class="hint" style="margin:0 0 12px">These sites run automatically on the scheduled cron job. Daily sites run every day; weekly sites run Mondays; off pauses a site without removing it. Add clients from the Scan tab with the "Add to recurring" button; Edit loads a client back into the form.</p>
+    <div id="sched-list"></div>
+  </section>
+  </div>
 </main>
 
 <script>
@@ -232,12 +243,22 @@ async function restoreResults(){
 }
 
 // ---- recurring scan schedule ----
+function showTab(which){
+  $('view-scan').style.display = which === 'scan' ? 'block' : 'none';
+  $('view-recurring').style.display = which === 'recurring' ? 'block' : 'none';
+  $('tab-scan').classList.toggle('on', which === 'scan');
+  $('tab-recurring').classList.toggle('on', which === 'recurring');
+}
+
 let schedSites = [];
 async function loadSchedule(){
   try {
     const d = await (await fetch('/sites')).json();
-    if (!d.enabled) return; // no DB - keep panel hidden
-    $('sched-panel').style.display = 'block';
+    if (!d.enabled) {
+      $('tab-recurring').style.display = 'none'; // no DB - no schedule
+      return;
+    }
+    $('sched-add').style.display = 'inline-block';
     schedSites = d.sites || [];
     const list = $('sched-list');
     if (!schedSites.length){
@@ -258,6 +279,7 @@ async function loadSchedule(){
           <option value="weekly" ${s.frequency==='weekly'?'selected':''}>Weekly</option>
           <option value="off" ${s.frequency==='off'?'selected':''}>Off</option>
         </select>
+        <button class="rm" style="color:var(--velocity)" onclick="editSite(${i})" title="Load this client into the Scan form to change its details, then press Add to recurring to save">Edit</button>
         <button class="rm" onclick="removeSite(${i})">Remove</button>
       </div>`).join('');
   } catch(e){ /* panel stays hidden */ }
@@ -282,15 +304,31 @@ async function removeSite(i){
     body: JSON.stringify({url: s.url})});
   loadSchedule();
 }
+function editSite(i){
+  const s = schedSites[i];
+  $('client-name').value = s.client_name || '';
+  $('site-url').value = s.url;
+  $('urls').value = (s.conversion_urls || []).join('\n');
+  selectedProducts = [...(s.products || [])];
+  $('sched-freq').value = s.frequency === 'off' ? 'daily' : s.frequency;
+  renderChips();
+  showTab('scan');
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
 async function addSite(){
-  const url = $('sched-url').value.trim();
-  if (!url) return;
+  const url = $('site-url').value.trim();
+  if (!url) { $('site-url').focus(); return; }
   const conv = $('urls').value.split('\n').map(s => s.trim()).filter(Boolean);
   const resp = await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({url, frequency: $('sched-freq').value,
       products: selectedProducts, conversion_urls: conv,
       include_conversions: true, client_name: $('client-name').value.trim()})});
-  if (resp.ok) $('sched-url').value = '';
+  if (resp.ok){
+    const btn = $('sched-add');
+    const label = btn.textContent;
+    btn.textContent = 'Saved \u2713';
+    setTimeout(() => { btn.textContent = label; }, 1800);
+  }
   loadSchedule();
 }
 
@@ -302,8 +340,15 @@ const VERDICT_META = {
   error:           {cls:'warn',    label:'Scan error'},
 };
 
+const CHAIN_TIPS = {
+  'CMP': 'Consent Management Platform: the cookie-banner vendor detected on this page. "None found" means no known consent tech is installed, so nothing is gating the pixels.',
+  'Banner visible': 'Whether the consent banner actually rendered on page load. A CMP can be installed but broken, hidden, or geo-gated to other regions.',
+  'Consent Mode default': 'Whether Google Consent Mode defaults (e.g. ad_storage=denied) are set before any interaction. Without them, Google tags treat consent as granted and the consent checks in GTM do nothing.',
+  'Pre-consent trackers': 'Ad/analytics requests that fired BEFORE any consent interaction. Non-Google fires are compliance violations; Google fires may be permitted cookieless Consent Mode pings.',
+  'Product pixels': 'Vici product pixels seen on this page, firing vs expected (e.g. BARCK+ 3/5). Products selected for this client that show 0 firing are flagged as missing.',
+};
 function chainLink(k, v, state){
-  return `<div class="link ${state}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  return `<div class="link ${state}" title="${CHAIN_TIPS[k] || ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
 
 function renderSite(r, i){
@@ -481,34 +526,42 @@ async function run(){
   $('go').disabled = true;
   $('progress').style.display = 'flex';
 
-  for (let i = 0; i < urls.length; i++){
-    $('progress-label').textContent = `Scanning ${urls[i]}`;
-    $('progress-count').textContent = `${i + 1} / ${urls.length}`;
-    $('bar-fill').style.width = `${(i / urls.length) * 100}%`;
-    try {
-      const resp = await fetch('/scan', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url: urls[i], full, products: selectedProducts, run_id: runId, client_name: clientName}),
-      });
-      const r = await resp.json();
-      r.scanned_local = new Date().toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
-      // keep this run's pages in scan order while the run stays newest-first
-      const lastOfRun = results.findLastIndex(x => x.run_id === runId);
-      results.splice(lastOfRun >= 0 ? lastOfRun + 1 : 0, 0, r);
-      freshCount++;
-    } catch (e) {
-      freshCount++;
-      results.unshift({url: urls[i], ok:false, mode:'basic', verdict:'error',
-        run_id: runId, client_name: clientName,
-        scanned_local: new Date().toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}),
-        verdict_detail:'Request failed - the scan may have timed out. Try again or use basic mode.',
-        cmps:[], pre_consent:[], gtm:{found:false,container_ids:[]},
-        banner_visible:'unknown', consent_mode_default:'unknown', consent_defaults:{}});
-    }
+  // two scans in flight at once - the server runs one Chromium per request
+  const CONCURRENCY = full ? 2 : 4;
+  let nextIdx = 0, doneCount = 0;
+  const stamp = () => new Date().toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
+  const insertResult = r => {
+    const lastOfRun = results.findLastIndex(x => x.run_id === runId);
+    results.splice(lastOfRun >= 0 ? lastOfRun + 1 : 0, 0, r);
+    freshCount++; doneCount++;
+    $('progress-count').textContent = `${doneCount} / ${urls.length}`;
+    $('bar-fill').style.width = `${(doneCount / urls.length) * 100}%`;
     saveResults();
     render();
+  };
+  async function scanWorker(){
+    while (nextIdx < urls.length){
+      const i = nextIdx++;
+      $('progress-label').textContent = `Scanning ${urls[i]}`;
+      try {
+        const resp = await fetch('/scan', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({url: urls[i], full, products: selectedProducts, run_id: runId, client_name: clientName}),
+        });
+        const r = await resp.json();
+        r.scanned_local = stamp();
+        insertResult(r);
+      } catch (e) {
+        insertResult({url: urls[i], ok:false, mode:'basic', verdict:'error',
+          run_id: runId, client_name: clientName, scanned_local: stamp(),
+          verdict_detail:'Request failed - the scan may have timed out. Try again or use basic mode.',
+          cmps:[], pre_consent:[], gtm:{found:false,container_ids:[]},
+          banner_visible:'unknown', consent_mode_default:'unknown', consent_defaults:{}});
+      }
+    }
   }
+  await Promise.all(Array.from({length: Math.min(CONCURRENCY, urls.length)}, scanWorker));
   $('bar-fill').style.width = '100%';
   $('progress-label').textContent = 'Done';
   $('go').disabled = false;
@@ -557,7 +610,6 @@ $('clear').addEventListener('click', () => {
   render();
 });
 $('sched-add').addEventListener('click', addSite);
-$('sched-url').addEventListener('keydown', e => { if (e.key === 'Enter') addSite(); });
 renderChips();
 restoreResults();
 loadSchedule();

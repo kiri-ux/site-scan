@@ -31,7 +31,9 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 GTM_ID_RE = re.compile(r"GTM-[A-Z0-9]{4,}")
 REQUEST_TIMEOUT = 15
 PAGE_TIMEOUT_MS = 30000
-SETTLE_SECONDS = 3.0
+SETTLE_SECONDS = 2.0
+NETIDLE_PRE_MS = 4000
+NETIDLE_POST_MS = 3000
 
 
 # ---------------------------------------------------------------- helpers
@@ -218,11 +220,22 @@ def full_scan(url, products=None):
         page.on("request",
                 lambda req: requests_seen.append((time.time(), req.url)))
 
+        def _route(route):
+            # Skip downloading heavy assets for speed. Scripts, XHR, and
+            # stylesheets still load (CMPs and tags need them); aborted
+            # requests are already captured by the request listener above.
+            if route.request.resource_type in ("image", "media", "font"):
+                route.abort()
+            else:
+                route.continue_()
+        page.route("**/*", _route)
+
         try:
             page.goto(url, wait_until="domcontentloaded",
                       timeout=PAGE_TIMEOUT_MS)
             try:
-                page.wait_for_load_state("networkidle", timeout=10000)
+                page.wait_for_load_state("networkidle",
+                                         timeout=NETIDLE_PRE_MS)
             except Exception:
                 pass  # busy sites never go idle; the settle sleep covers us
             time.sleep(SETTLE_SECONDS)  # let late tags + banner render
@@ -340,7 +353,8 @@ def full_scan(url, products=None):
             result["accept_clicked"] = click_time is not None
         if result["accept_clicked"]:
             try:
-                page.wait_for_load_state("networkidle", timeout=6000)
+                page.wait_for_load_state("networkidle",
+                                         timeout=NETIDLE_POST_MS)
             except Exception:
                 pass
             time.sleep(SETTLE_SECONDS)  # let consent-gated tags fire

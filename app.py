@@ -19,8 +19,11 @@ app = Flask(__name__)
 
 BUILD = open(os.path.join(os.path.dirname(__file__), "VERSION")).read().strip() \
     if os.path.exists(os.path.join(os.path.dirname(__file__), "VERSION")) else "dev"
-DEPLOYED = datetime.now(ZoneInfo("America/New_York")).strftime(
-    "%Y-%m-%d %I:%M %p ET")
+try:
+    DEPLOYED = datetime.now(ZoneInfo("America/New_York")).strftime(
+        "%Y-%m-%d %I:%M %p ET")
+except Exception:  # tz database unavailable - never let this kill boot
+    DEPLOYED = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
 try:
     db.init_db()

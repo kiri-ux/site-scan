@@ -128,3 +128,26 @@ banner visibility, Consent Mode, or pre-consent fires.
   {orderid} get an "unfilled macros" warning - the tag fires but sends
   blank conversion data. ${GDPR}-style consent macros are expected and
   not flagged.
+
+## v0.8.0 - tabs, tooltips, recurring management
+- Two tabs: Scan (form + results) and Recurring scans (schedule list).
+  The Recurring tab hides entirely when no database is connected.
+- "Add to recurring" button in the scan form saves the whole client
+  (name, site, conversion URLs, products) with the chosen frequency;
+  quick-add moved out of the schedule panel.
+- Edit on a schedule row loads the client back into the scan form;
+  pressing Add to recurring re-saves (upsert by site URL).
+- Hover tooltips on every consent-chain cell explain what the check
+  means and how to read its states.
+
+## v0.8.1 - deploy fix + speed pass
+- FIX: v0.7.x deploy crash (ZoneInfoNotFoundError) - the Playwright
+  image lacks the system tz database. Added the tzdata pip package and
+  a UTC fallback so the deploy stamp can never break boot.
+- Speed: networkidle waits capped (4s pre-consent / 3s post), settle
+  trimmed to 2s, and images/media/fonts are no longer downloaded
+  (requests are still recorded at initiation, so pixel detection is
+  unaffected). Typical full scans drop from 15-40s to roughly 7-15s.
+- UI batches now run 2 scans in flight (4 in basic mode); the cron job
+  scans SCAN_CONCURRENCY sites in parallel (default 2, max 4). On the
+  2GB instance, 2 concurrent Chromiums is the safe ceiling.
