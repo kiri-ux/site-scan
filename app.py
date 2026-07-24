@@ -17,17 +17,21 @@ import db
 from scanner import scan_site, normalize_url
 
 
-def _clean_conv_line(chunk):
-    """Keep only a URL token: the first whitespace-delimited piece minus
-    wrapping punctuation; reject non-URLs (annotations, notes)."""
-    parts = chunk.strip().split()
-    u = parts[0] if parts else ""
-    u = re.sub(r"^[(\"'\[<]+", "", u)
-    u = re.sub(r"[)\"'\]>,;.]+$", "", u)
-    host = re.sub(r"^https?://", "", u).split("/")[0]
-    if not u or "." not in host:
-        return ""
-    return u
+_CONV_URL_RE = re.compile(
+    r"(https?://[^\s,]+"
+    r"|(?:www\.)?[a-z0-9][a-z0-9-]*(?:\.[a-z]{2,})+(?:/[^\s,]*)?)",
+    re.I)
+
+
+def _extract_conv_urls(chunk):
+    """Harvest every URL-looking token from a line; drop annotations."""
+    out = []
+    for m in _CONV_URL_RE.finditer(chunk):
+        u = re.sub(r"[)\"'\]>,;.:]+$", "", m.group(0))
+        host = re.sub(r"^https?://", "", u, flags=re.I).split("/")[0]
+        if "." in host:
+            out.append(u)
+    return out
 from signatures import PRODUCT_NAMES
 from state_checks import STATE_CODES
 
@@ -61,7 +65,8 @@ def scan():
     result = scan_site(data.get("url", ""),
                        prefer_full=bool(data.get("full", True)),
                        products=products or None,
-                       states=states or None)
+                       states=states or None,
+                       site_checks=bool(data.get("site_checks", True)))
     result["client_name"] = str(data.get("client_name", ""))[:200]
     result["run_id"] = str(data.get("run_id", ""))[:64]
     if result["ok"]:
@@ -106,7 +111,7 @@ def upsert_site():
     if isinstance(conv, str):
         conv = conv.splitlines()
     conversion_urls = "\n".join(
-        c for c in (_clean_conv_line(str(x)) for x in conv) if c)[:8000]
+        u for x in conv for u in _extract_conv_urls(str(x)))[:8000]
     include_conversions = bool(data.get("include_conversions", True))
     client_name = str(data.get("client_name", ""))
     states = ",".join(s for s in (data.get("states") or [])

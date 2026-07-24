@@ -236,21 +236,23 @@ function renderConvPills(){
     box.insertBefore(pill, input);
   });
 }
-function cleanConvUrl(chunk){
-  // keep only the URL token: first whitespace-delimited piece, minus
-  // trailing punctuation - drops annotations like "(view-through)"
-  let u = chunk.trim().split(/\s+/)[0] || '';
-  u = u.replace(/^[("'\[<]+/, '').replace(/[)"'\]>,;.]+$/, '');
-  if (!u || u.startsWith('(')) return '';
-  const host = u.replace(/^https?:\/\//, '').split('/')[0];
-  if (!host.includes('.') || /\s/.test(u)) return ''; // not a URL
-  return u;
+function extractConvUrls(chunk){
+  // harvest EVERY URL-looking token from the text; drop everything else
+  // (annotations, notes). Requires a real TLD so words like "e.g." and
+  // sentence fragments never qualify.
+  const out = [];
+  const re = /(https?:\/\/[^\s,]+|(?:www\.)?[a-z0-9][a-z0-9-]*(?:\.[a-z]{2,})+(?:\/[^\s,]*)?)/gi;
+  let m;
+  while ((m = re.exec(chunk))){
+    const u = m[0].replace(/[)"'\]>,;.:]+$/, '');
+    const host = u.replace(/^https?:\/\//i, '').split('/')[0];
+    if (host.includes('.')) out.push(u);
+  }
+  return out;
 }
 function sanitizeConvList(list){
   const out = [], seen = new Set();
-  (list || []).forEach(x => {
-    const u = cleanConvUrl(String(x));
-    if (!u) return;
+  (list || []).flatMap(x => extractConvUrls(String(x))).forEach(u => {
     const k = normUrl(u);
     if (!k || seen.has(k)) return;
     seen.add(k); out.push(u);
@@ -258,9 +260,7 @@ function sanitizeConvList(list){
   return out;
 }
 function addConvUrls(text){
-  text.split(/[\n,]/).forEach(chunk => {
-    const u = cleanConvUrl(chunk);
-    if (!u) return;
+  extractConvUrls(text).forEach(u => {
     const key = normUrl(u);
     if (!key) return;
     if (convUrls.some(x => normUrl(x) === key)) return;
@@ -278,7 +278,7 @@ function toggleProduct(p){
     ? selectedProducts.filter(x => x !== p) : [...selectedProducts, p];
   renderChips();
 }
-const STATES = ['CA','CO','CT','TX','MT','OR','DE','NH','NJ','NE','MD','MN','VA','UT','IA','IN','KY','TN','RI','FL'];
+const STATES = ['CA','CO','CT','DE','FL','IA','IN','KY','MD','MN','MT','NE','NH','NJ','OR','RI','TN','TX','UT','VA'];
 let selectedStates = [];
 function renderStateChips(){
   $('state-chips').innerHTML = STATES.map(s =>
@@ -563,7 +563,7 @@ async function run(){
         const resp = await fetch('/scan', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, run_id: runId, client_name: clientName}),
+          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === 0, run_id: runId, client_name: clientName}),
           signal: ctrl.signal,
         });
         clearTimeout(timer);

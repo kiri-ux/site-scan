@@ -272,3 +272,12 @@ banner visibility, Consent Mode, or pre-consent fires.
   Chromium on ad-heavy pages accumulates memory until CDP calls wedge.
 - Every scan logs "[scan] start/done url [verdict] Xs" to stdout, so
   Render Logs show live per-page progress and timings.
+
+## v0.10.6 - site-level checks run once per client
+- Reject-path and GPC passes (and their state checks) now run only on
+  the MAIN site; conversion pages get the light pass (pre-consent,
+  accept, product pixels) since CMP/GPC behavior is site-wide while
+  pixels vary per page. Roughly halves total loads on state-targeted
+  clients. Conversion rows show "See main site" in the Reject cell.
+  Cron applies the same split. Override per request with site_checks.
+- State target chips ordered alphabetically.

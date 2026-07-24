@@ -53,7 +53,8 @@ function chainFor(r){
                   : prods.map(p => p.expected > 1 ? `${p.product} ${p.fired}/${p.expected}` : p.product).join(', ');
   const rejViol = (r.post_reject || []).filter(h => h.severity === 'violation');
   const rejState = !r.reject_tested ? 'mid' : rejViol.length ? 'fail' : 'pass';
-  const rejLabel = !r.reject_tested
+  const rejLabel = r.site_checks_skipped ? 'See main site'
+      : !r.reject_tested
       ? (r.cmps.length && r.banner_visible === true ? 'No reject option' : 'Untested')
       : rejViol.length ? `${rejViol.length} firing` : 'Yes';
   const scFails = (r.state_checks||[]).filter(c => c.status === 'fail');

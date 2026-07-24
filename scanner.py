@@ -222,7 +222,8 @@ def basic_scan(url, result=None):
 
 # ---------------------------------------------------------------- tier 2
 
-def _full_scan_impl(browser, url, products=None, states=None):
+def _full_scan_impl(browser, url, products=None, states=None,
+                    site_checks=True):
     result = _empty_result(url)
     result["mode"] = "full"
     requests_seen = []  # (timestamp, url)
@@ -387,7 +388,8 @@ def _full_scan_impl(browser, url, products=None, states=None):
     # --- reject pass: fresh context (no cookies), load, click Reject,
     #     record what fires afterward. The actively-litigated failure is
     #     "user said no and the pixel fired anyway".
-    if result["ok"] and result["cmps"] and result["banner_visible"] is True:
+    if (site_checks and result["ok"] and result["cmps"]
+            and result["banner_visible"] is True):
         rej_seen = []
         ctx2 = browser.new_context(user_agent=UA, locale="en-US",
                                    viewport={"width": 1366, "height": 900})
@@ -449,8 +451,10 @@ def _full_scan_impl(browser, url, products=None, states=None):
     #     see whether ad trackers are still contacted. Runs only when a
     #     targeted state requires honoring universal opt-out signals.
     states = [s for s in (states or []) if s in STATE_CHECKS]
-    result["states"] = states
-    if result["ok"] and any(STATE_CHECKS[s].get("gpc") for s in states):
+    result["states"] = states if site_checks else []
+    result["site_checks_skipped"] = not site_checks
+    if (site_checks and result["ok"]
+            and any(STATE_CHECKS[s].get("gpc") for s in states)):
         gpc_seen = []
         ctx3 = browser.new_context(
             user_agent=UA, locale="en-US",
@@ -498,7 +502,7 @@ def _full_scan_impl(browser, url, products=None, states=None):
                 pass
 
     # --- per-state check results
-    for s in states:
+    for s in (states if site_checks else []):
         cfg = STATE_CHECKS[s]
         if cfg.get("gpc"):
             if not result["gpc_tested"]:
@@ -629,8 +633,9 @@ import threading as _threading
 
 
 class _ScanJob:
-    def __init__(self, url, products, states=None):
+    def __init__(self, url, products, states=None, site_checks=True):
         self.url, self.products, self.states = url, products, states
+        self.site_checks = site_checks
         self.done = _threading.Event()
         self.result, self.error = None, None
 
@@ -656,7 +661,8 @@ class _BrowserWorker(_threading.Thread):
                 if self.browser is None or not self.browser.is_connected():
                     self._launch()
                 job.result = _full_scan_impl(self.browser, job.url,
-                                             job.products, job.states)
+                                             job.products, job.states,
+                                             job.site_checks)
             except Exception as first_err:
                 # browser may have died - relaunch once and retry
                 try:
@@ -697,11 +703,11 @@ class _BrowserPool:
                 w.start()
                 self.workers.append(w)
 
-    def run(self, url, products, states=None):
+    def run(self, url, products, states=None, site_checks=True):
         self._ensure()
         if self.init_error:
             raise ImportError(str(self.init_error))
-        job = _ScanJob(url, products, states)
+        job = _ScanJob(url, products, states, site_checks)
         self.jobs.put(job)
         if not job.done.wait(timeout=120):
             raise TimeoutError("Scan timed out in browser pool")
@@ -713,8 +719,8 @@ class _BrowserPool:
 _pool = _BrowserPool()
 
 
-def full_scan(url, products=None, states=None):
-    return _pool.run(url, products, states)
+def full_scan(url, products=None, states=None, site_checks=True):
+    return _pool.run(url, products, states, site_checks)
 
 
 # ---------------------------------------------------------------- verdict
@@ -790,7 +796,8 @@ def _apply_verdict(r):
 
 # ---------------------------------------------------------------- entry
 
-def scan_site(raw_url, prefer_full=True, products=None, states=None):
+def scan_site(raw_url, prefer_full=True, products=None, states=None,
+              site_checks=True):
     url = normalize_url(raw_url)
     if not url:
         r = _empty_result(raw_url or "")
@@ -799,7 +806,8 @@ def scan_site(raw_url, prefer_full=True, products=None, states=None):
 
     if prefer_full:
         try:
-            return _apply_verdict(full_scan(url, products=products, states=states))
+            return _apply_verdict(full_scan(url, products=products, states=states,
+                                        site_checks=site_checks))
         except ImportError:
             pass  # Playwright not installed - fall through to basic
         except Exception as e:
