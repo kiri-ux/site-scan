@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.10.7"
+SCANNER_REV = "0.10.8"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -116,7 +116,10 @@ def _try_click(page, selectors, loose, strict, wait_seconds=4):
                         return t
                 except Exception:
                     pass
-        time.sleep(0.5)
+        try:
+            page.wait_for_timeout(500)  # services route callbacks
+        except Exception:
+            time.sleep(0.5)
 
     for pattern, css in ((loose, "button"),
                          (strict, "a, [role='button'], input[type='button'], "
@@ -256,8 +259,12 @@ def _full_scan_impl(browser, url, products=None, states=None,
                                          timeout=NETIDLE_PRE_MS)
             except Exception:
                 pass  # busy sites never go idle; the settle sleep covers us
-            time.sleep(SETTLE_SECONDS)  # let late tags + banner render
+            page.wait_for_timeout(int(SETTLE_SECONDS * 1000))  # let late tags + banner render
         except Exception as e:
+            try:
+                page.unroute("**/*")
+            except Exception:
+                pass
             context.close()
             result["error"] = f"Page load failed: {e.__class__.__name__}"
             return result
@@ -384,8 +391,12 @@ def _full_scan_impl(browser, url, products=None, states=None,
                                          timeout=NETIDLE_POST_MS)
             except Exception:
                 pass
-            time.sleep(SETTLE_SECONDS)  # let consent-gated tags fire
+            page.wait_for_timeout(int(SETTLE_SECONDS * 1000))  # let consent-gated tags fire
 
+        try:
+            page.unroute("**/*")
+        except Exception:
+            pass
         context.close()
 
     # --- reject pass: fresh context (no cookies), load, click Reject,
@@ -414,7 +425,7 @@ def _full_scan_impl(browser, url, products=None, states=None,
                                         timeout=NETIDLE_PRE_MS)
             except Exception:
                 pass
-            time.sleep(1.0)
+            pg2.wait_for_timeout(1000)
             rt = _try_reject(pg2, [c["name"] for c in result["cmps"]])
             if rt is not None:
                 result["reject_tested"] = True
@@ -423,7 +434,7 @@ def _full_scan_impl(browser, url, products=None, states=None,
                                             timeout=NETIDLE_POST_MS)
                 except Exception:
                     pass
-                time.sleep(SETTLE_SECONDS)
+                pg2.wait_for_timeout(int(SETTLE_SECONDS * 1000))
                 seen_rej = set()
                 for t, u in rej_seen:
                     if t < rt:
@@ -445,6 +456,10 @@ def _full_scan_impl(browser, url, products=None, states=None,
         except Exception:
             pass
         finally:
+            try:
+                pg2.unroute("**/*")
+            except Exception:
+                pass
             try:
                 ctx2.close()
             except Exception:
@@ -483,7 +498,7 @@ def _full_scan_impl(browser, url, products=None, states=None,
                                         timeout=NETIDLE_PRE_MS)
             except Exception:
                 pass
-            time.sleep(SETTLE_SECONDS)
+            pg3.wait_for_timeout(int(SETTLE_SECONDS * 1000))
             result["gpc_tested"] = True
             gpc_vendors = {}
             for u in gpc_seen:
@@ -499,6 +514,10 @@ def _full_scan_impl(browser, url, products=None, states=None,
         except Exception:
             pass
         finally:
+            try:
+                pg3.unroute("**/*")
+            except Exception:
+                pass
             try:
                 ctx3.close()
             except Exception:

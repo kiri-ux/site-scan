@@ -285,3 +285,11 @@ banner visibility, Consent Mode, or pre-consent fires.
 ## v0.10.7
 - Scanner prints "[scanner] rev X loaded" at boot so Render logs prove
   which scanner.py is actually deployed (catches partial uploads).
+
+## v0.10.8 - request-storm wedge fix (the /secret stall)
+- All settle waits now use page.wait_for_timeout, which services route
+  callbacks while waiting; time.sleep blocked the thread that answers
+  intercepted requests, so a request-storm page (continuous ad pixel
+  fires) piled up unanswered intercepts and context.close() hung
+  forever draining them - wedging the pool worker on that page every
+  run. Pages also unroute before close as a second guard.
