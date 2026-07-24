@@ -36,7 +36,8 @@ def load_sites():
     if db.enabled():
         try:
             monday = datetime.now(timezone.utc).weekday() == 0
-            due = [s["url"] for s in db.list_sites()
+            due = [(s["url"], s.get("products") or None)
+                   for s in db.list_sites()
                    if s["frequency"] == "daily"
                    or (s["frequency"] == "weekly" and monday)]
             if due:
@@ -52,15 +53,14 @@ def load_sites():
     for chunk in raw.replace(",", "\n").splitlines():
         s = chunk.strip()
         if s and not s.startswith("#"):
-            sites.append(s)
+            sites.append((s, None))
     return sites
 
 
 def to_rows(results):
     head = ["url", "verdict", "cmp", "banner_visible", "consent_mode_default",
-            "pre_consent_violations", "dsp_pixels_fired",
-            "dsp_fired_pre_consent_only", "accept_clicked", "detail",
-            "scanned_at"]
+            "pre_consent_violations", "product_pixels", "products_missing",
+            "accept_clicked", "detail", "scanned_at"]
     rows = [head]
     for r in results:
         rows.append([
@@ -69,9 +69,10 @@ def to_rows(results):
             str(r["banner_visible"]), str(r["consent_mode_default"]),
             "; ".join(h["vendor"] for h in r["pre_consent"]
                       if h["severity"] == "violation"),
-            "; ".join(d["vendor"] for d in r.get("dsp_pixels", [])),
-            "; ".join(d["vendor"] for d in r.get("dsp_pixels", [])
-                      if d["fired_pre"] and not d["fired_post"]),
+            "; ".join(f"{p['product']} {p['fired']}/{p['expected']}"
+                      for p in r.get("products", [])),
+            "; ".join(p["product"] for p in r.get("products", [])
+                      if p["fired"] == 0),
             str(r.get("accept_clicked", False)),
             r["verdict_detail"] or r["error"] or "",
             r["scanned_at"],
@@ -83,9 +84,12 @@ def needs_alert(results):
     for r in results:
         if r["verdict"] in ("no_cmp", "misconfigured", "error"):
             return True
-        if any(d["fired_pre"] and not d["fired_post"]
-               for d in r.get("dsp_pixels", [])):
-            return True
+        for p in r.get("products", []):
+            if p["fired"] == 0:            # bought product, nothing firing
+                return True
+            if any(px["fired_pre"] and not px["fired_post"]
+                   for px in p["pixels"]): # working but not consent-gated
+                return True
     return False
 
 
@@ -135,8 +139,8 @@ def main():
 
     print(f"Scanning {len(sites)} sites...")
     results = []
-    for s in sites:
-        r = scan_site(s, prefer_full=True)
+    for s, prods in sites:
+        r = scan_site(s, prefer_full=True, products=prods)
         results.append(r)
         if r["ok"]:
             try:

@@ -39,8 +39,11 @@ def init_db():
                 url TEXT PRIMARY KEY,
                 frequency TEXT NOT NULL DEFAULT 'daily'
                     CHECK (frequency IN ('daily', 'weekly', 'off')),
+                products TEXT NOT NULL DEFAULT '',
                 added_at TIMESTAMPTZ NOT NULL DEFAULT now()
             );
+            ALTER TABLE schedule
+                ADD COLUMN IF NOT EXISTS products TEXT NOT NULL DEFAULT '';
         """)
 
 
@@ -72,16 +75,22 @@ def list_sites():
     if not enabled():
         return []
     with _conn() as cn, cn.cursor() as cur:
-        cur.execute("SELECT url, frequency FROM schedule ORDER BY url")
-        return [{"url": u, "frequency": f} for u, f in cur.fetchall()]
+        cur.execute(
+            "SELECT url, frequency, products FROM schedule ORDER BY url")
+        return [{"url": u, "frequency": f,
+                 "products": [p for p in (pr or "").split(",") if p]}
+                for u, f, pr in cur.fetchall()]
 
 
-def upsert_site(url, frequency):
+def upsert_site(url, frequency, products=""):
     with _conn() as cn, cn.cursor() as cur:
         cur.execute("""
-            INSERT INTO schedule (url, frequency) VALUES (%s, %s)
-            ON CONFLICT (url) DO UPDATE SET frequency = EXCLUDED.frequency
-        """, (url, frequency))
+            INSERT INTO schedule (url, frequency, products)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (url) DO UPDATE
+                SET frequency = EXCLUDED.frequency,
+                    products = EXCLUDED.products
+        """, (url, frequency, products))
 
 
 def delete_site(url):

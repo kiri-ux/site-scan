@@ -59,6 +59,16 @@
   .site-head .cmp-name{font-size:13px;color:var(--muted);white-space:nowrap}
   .caret{color:var(--muted);transition:transform .2s;font-size:12px}
   .scanned{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+  .field-label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--atlas);margin:14px 0 6px}
+  .field-label:first-of-type{margin-top:0}
+  .field-label .opt{font-family:'Barlow',sans-serif;text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);font-size:12.5px}
+  .text-input{width:100%;border:1px solid var(--line);border-radius:8px;padding:11px 14px;font:14px 'Barlow',sans-serif;background:#FCFCFB;color:var(--ink)}
+  .text-input:focus{outline:2px solid var(--velocity);outline-offset:1px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-family:'Barlow',sans-serif;font-size:13.5px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:20px;padding:7px 15px;cursor:pointer}
+  .chip.on{background:var(--atlas);border-color:var(--atlas);color:#fff}
+  .chip:focus-visible{outline:2px solid var(--velocity);outline-offset:2px}
+  .prod-tags{font-size:12px;color:var(--muted)}
   .freq-select{border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:14px 'Barlow',sans-serif;background:#FCFCFB;color:var(--ink)}
   .sched-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px}
   .sched-row:last-child{border-bottom:none}
@@ -113,9 +123,14 @@
 
 <main>
   <section class="panel">
-    <h2>Scan client sites</h2>
-    <textarea id="urls" placeholder="One site per line, e.g.&#10;sagedental.com&#10;https://www.trunorth.example"></textarea>
-    <div class="hint">Full scan loads each page in a headless browser and records which pixels fire before any consent interaction. Roughly 15&ndash;40 seconds per site.</div>
+    <h2>Scan a client</h2>
+    <label class="field-label" for="site-url">Client website</label>
+    <input id="site-url" type="text" class="text-input" placeholder="clientsite.com">
+    <label class="field-label" for="urls">Conversion URLs to check <span class="opt">(optional, one per line - landing pages, thank-you pages)</span></label>
+    <textarea id="urls" placeholder="clientsite.com/schedule-service&#10;clientsite.com/thank-you"></textarea>
+    <label class="field-label">Products <span class="opt">(select what this client runs - unselected products are still detected if seen)</span></label>
+    <div class="chips" id="product-chips"></div>
+    <div class="hint">Full scan loads each page in a headless browser, records pre-consent fires, clicks Accept, then verifies the selected products' pixels. Roughly 15&ndash;40 seconds per page.</div>
     <div class="row">
       <button class="btn-primary" id="go">Scan sites</button>
       <button class="btn-ghost" id="csv" disabled>Download CSV</button>
@@ -131,7 +146,7 @@
 
   <section class="panel" id="sched-panel" style="display:none">
     <h2>Recurring scans</h2>
-    <p class="hint" style="margin:0 0 12px">These sites run automatically on the scheduled cron job. Daily sites run every day; weekly sites run Mondays; off pauses a site without removing it.</p>
+    <p class="hint" style="margin:0 0 12px">These sites run automatically on the scheduled cron job. Daily sites run every day; weekly sites run Mondays; off pauses a site without removing it. The products selected above are saved with the site when you add it.</p>
     <div class="row" style="margin:0 0 12px">
       <input id="sched-url" type="text" placeholder="clientsite.com" style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font:14px 'Barlow',sans-serif;background:#FCFCFB">
       <select id="sched-freq" class="freq-select">
@@ -154,6 +169,17 @@ const STORE_KEY = 'consent-scan-results-v1';
 let results = [];
 
 let dbEnabled = false;
+const PRODUCTS = ['Amazon','BARCK+','LinkedIn','Meta','Mobile','PPC','Performance Max','TikTok','WVID'];
+let selectedProducts = [];
+function renderChips(){
+  $('product-chips').innerHTML = PRODUCTS.map(p =>
+    `<button type="button" class="chip ${selectedProducts.includes(p)?'on':''}" onclick="toggleProduct('${p.replace(/'/g,"\\'")}')">${p}</button>`).join('');
+}
+function toggleProduct(p){
+  selectedProducts = selectedProducts.includes(p)
+    ? selectedProducts.filter(x => x !== p) : [...selectedProducts, p];
+  renderChips();
+}
 
 function saveResults(){
   if (dbEnabled) return; // server history is the source of truth
@@ -195,8 +221,8 @@ async function loadSchedule(){
     }
     list.innerHTML = d.sites.map(s => `
       <div class="sched-row">
-        <span class="surl">${s.url}</span>
-        <select class="freq-select" onchange="setFreq('${s.url.replace(/'/g,"\\'")}', this.value)">
+        <span class="surl">${s.url}${(s.products||[]).length ? ` <span class="prod-tags">${s.products.join(' &middot; ')}</span>` : ''}</span>
+        <select class="freq-select" onchange='setFreq(${JSON.stringify(s.url)}, this.value, ${JSON.stringify(s.products||[])})'>
           <option value="daily" ${s.frequency==='daily'?'selected':''}>Daily</option>
           <option value="weekly" ${s.frequency==='weekly'?'selected':''}>Weekly</option>
           <option value="off" ${s.frequency==='off'?'selected':''}>Off</option>
@@ -205,9 +231,9 @@ async function loadSchedule(){
       </div>`).join('');
   } catch(e){ /* panel stays hidden */ }
 }
-async function setFreq(url, frequency){
+async function setFreq(url, frequency, products){
   await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({url, frequency})});
+    body: JSON.stringify({url, frequency, products: products || []})});
   loadSchedule();
 }
 async function removeSite(url){
@@ -220,7 +246,7 @@ async function addSite(){
   const url = $('sched-url').value.trim();
   if (!url) return;
   const resp = await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({url, frequency: $('sched-freq').value})});
+    body: JSON.stringify({url, frequency: $('sched-freq').value, products: selectedProducts})});
   if (resp.ok) $('sched-url').value = '';
   loadSchedule();
 }
@@ -253,11 +279,16 @@ function renderSite(r, i){
   const fireLabel = r.mode !== 'full' ? 'Unknown'
                   : viol.length ? `${viol.length} firing` : (warns.length ? 'Verify' : 'None');
 
-  const dsps = r.dsp_pixels || [];
-  const dspState = dsps.length ? 'pass' : (r.mode === 'full' ? 'mid' : 'mid');
-  const dspLabel = r.mode !== 'full' ? 'Unknown'
-                 : dsps.length ? dsps.map(d => d.vendor.split(' ')[0]).join(', ')
-                 : (r.accept_clicked ? 'None seen' : 'None (no accept)');
+  const prods = r.products || [];
+  const missing = prods.filter(p => p.fired === 0);
+  const partial = prods.filter(p => p.fired > 0 && p.fired < p.expected);
+  const prodState = r.mode !== 'full' ? 'mid'
+                  : missing.length ? 'fail'
+                  : partial.length ? 'mid'
+                  : prods.length ? 'pass' : 'mid';
+  const prodLabel = r.mode !== 'full' ? 'Unknown'
+                  : !prods.length ? (r.accept_clicked ? 'None seen' : 'Unverified')
+                  : prods.map(p => `${p.product} ${p.fired}/${p.expected}`).join(', ');
 
   const fmt = v => v === true ? 'Yes' : v === false ? 'No' : 'Unknown';
 
@@ -266,7 +297,7 @@ function renderSite(r, i){
       ${chainLink('Banner visible', fmt(r.banner_visible), bannerState)}
       ${chainLink('Consent Mode default', fmt(r.consent_mode_default), cmState)}
       ${chainLink('Pre-consent trackers', fireLabel, fireState)}
-      ${chainLink('DSP pixels', dspLabel, dspState)}
+      ${chainLink('Product pixels', prodLabel, prodState)}
     </div>`;
 
   const gtmEvent = r.cmps.map(c => c.gtm_event).find(Boolean);
@@ -285,11 +316,17 @@ function renderSite(r, i){
         <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Requests before consent</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
-  const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>DSP pixels</h3>` + (dsps.length ? `<ul>` + dsps.map(d =>
-      `<li><span class="badge ${d.fired_pre && !d.fired_post ? 'warn' : 'ok'}">${d.fired_pre && d.fired_post ? 'pre + post' : d.fired_post ? 'post-consent' : 'pre-consent'}</span>
-        <div><b>${d.vendor}</b>${d.fired_pre && !d.fired_post ? ' <span class="evidence">fired before consent only - working, but should be consent-gated</span>' : d.fired_post && !d.fired_pre ? ' <span class="evidence">fired after accept - gated and working</span>' : ''}
-        <div class="u">${d.sample_url}</div></div></li>`).join('') + `</ul>`
-    : `<p class="kv">${r.accept_clicked ? 'No BARCK+ / Trade Desk / Yahoo / Floodlight requests observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';
+  const pxBadge = px => !px.fired_pre && !px.fired_post
+        ? '<span class="badge bad">not firing</span>'
+        : px.fired_pre && !px.fired_post
+        ? '<span class="badge warn">pre-consent only</span>'
+        : '<span class="badge ok">' + (px.fired_pre ? 'pre + post' : 'post-consent') + '</span>';
+  const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>Product pixels</h3>` + (prods.length ? prods.map(p =>
+      `<div style="margin:0 0 10px"><b>${p.product}</b> <span class="pill">${p.fired}/${p.expected} firing</span>
+       <ul>` + p.pixels.map(px =>
+        `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ' <span class="evidence">working, but should be consent-gated</span>' : ''}
+         ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></div>`).join('')
+    : `<p class="kv">${r.accept_clicked ? 'No product pixels observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';
 
   const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>
       `<li><span class="badge ok">post-consent</span><div><b>${h.vendor}</b><div class="u">${h.url}</div></div></li>`).join('') + `</ul>` : '';
@@ -322,7 +359,8 @@ function render(){
 }
 
 async function run(){
-  const urls = $('urls').value.split('\n').map(s => s.trim()).filter(Boolean);
+  const main = $('site-url').value.trim();
+  const urls = [main, ...$('urls').value.split('\n').map(s => s.trim())].filter(Boolean);
   if (!urls.length) return;
   const full = $('fullmode').checked;
   results = []; render();
@@ -337,7 +375,7 @@ async function run(){
       const resp = await fetch('/scan', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url: urls[i], full}),
+        body: JSON.stringify({url: urls[i], full, products: selectedProducts}),
       });
       const r = await resp.json();
       r.scanned_local = new Date().toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
@@ -362,7 +400,7 @@ function toCsv(){
   const head = ['url','verdict','mode','cmp','gtm_trigger_event','banner_visible',
                 'consent_mode_default','consent_defaults','gtm_container_ids',
                 'pre_consent_violations','pre_consent_warnings','accept_clicked',
-                'dsp_pixels_fired','dsp_fired_pre_consent_only',
+                'product_pixels','products_missing',
                 'trackers_fired_after_accept','detail','scanned_at'];
   const rows = results.map(r => [
     r.url, r.verdict, r.mode,
@@ -374,8 +412,8 @@ function toCsv(){
     r.pre_consent.filter(h=>h.severity==='violation').map(h=>h.vendor).join('; '),
     r.pre_consent.filter(h=>h.severity==='warn').map(h=>h.vendor).join('; '),
     r.accept_clicked,
-    (r.dsp_pixels||[]).map(d=>d.vendor).join('; '),
-    (r.dsp_pixels||[]).filter(d=>d.fired_pre && !d.fired_post).map(d=>d.vendor).join('; '),
+    (r.products||[]).map(p=>`${p.product} ${p.fired}/${p.expected}`).join('; '),
+    (r.products||[]).filter(p=>p.fired===0).map(p=>p.product).join('; '),
     (r.post_consent||[]).map(h=>h.vendor).join('; '),
     r.verdict_detail || r.error || '', r.scanned_local || r.scanned_at || '',
   ].map(esc).join(','));
@@ -401,6 +439,7 @@ $('clear').addEventListener('click', () => {
 });
 $('sched-add').addEventListener('click', addSite);
 $('sched-url').addEventListener('keydown', e => { if (e.key === 'Enter') addSite(); });
+renderChips();
 restoreResults();
 loadSchedule();
 </script>

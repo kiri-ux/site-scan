@@ -171,20 +171,51 @@ GENERIC_ACCEPT_TEXT = r"accept all|allow all|accept cookies|accept|agree|allow|g
 STRICT_ACCEPT_TEXT = (r"^\s*(accept( all)?( cookies)?|i accept|agree|"
                       r"allow( all)?( cookies)?|got it|ok(ay)?)\s*$")
 
-# Vici DSP / ad-serving pixel endpoints. Detection is vendor-level ("did
-# the BARCK+ pixels fire"), not per-tag-ID. `patterns` are substring
-# matches against request URLs, so one domain covers conversion, segment,
-# and match pixels alike. Rename labels freely to match product naming.
-DSP_ENDPOINTS = [
-    {"vendor": "BARCK+ (Beeswax)",
-     "patterns": ["bidr.io"]},                     # cnv.event.prod / segment.prod / match.prod
-    {"vendor": "The Trade Desk",
-     "patterns": ["adsrvr.org"]},                  # insight.adsrvr.org, js.adsrvr.org
-    {"vendor": "Yahoo DSP",
-     "patterns": ["sp.analytics.yahoo.com"]},
-    {"vendor": "Google Floodlight (CM360/DV360)",
-     "patterns": ["ad.doubleclick.net/ddm/activity", "fls.doubleclick.net"]},
-]
+# Vici product -> expected pixel endpoints. Selecting a product on a scan
+# means "this client bought it, so these pixels SHOULD fire" - a product
+# with 0 firing sub-pixels is a flag, not a blank. Products with multiple
+# sub-pixels (BARCK+) report completeness, e.g. 3/5 firing.
+# Patterns are substring matches against request URLs.
+PRODUCT_PIXELS = {
+    "Amazon": [
+        {"name": "Amazon Ad Tag", "patterns": ["amazon-adsystem.com"]},
+    ],
+    "BARCK+": [
+        {"name": "Beeswax conversion", "patterns": ["cnv.event.prod.bidr.io"]},
+        {"name": "Beeswax segment", "patterns": ["segment.prod.bidr.io"]},
+        {"name": "Yahoo", "patterns": ["sp.analytics.yahoo.com"]},
+        {"name": "Floodlight", "patterns": ["ad.doubleclick.net/ddm/activity",
+                                            "fls.doubleclick.net"]},
+        {"name": "The Trade Desk", "patterns": ["insight.adsrvr.org"]},
+    ],
+    "LinkedIn": [
+        {"name": "LinkedIn Insight", "patterns": ["px.ads.linkedin.com",
+                                                  "snap.licdn.com"]},
+    ],
+    "Meta": [
+        {"name": "Meta Pixel", "patterns": ["facebook.com/tr",
+                                            "connect.facebook.net"]},
+    ],
+    "Mobile": [
+        {"name": "xAd/GroundTruth", "patterns": ["bidagent.xad.com"]},
+    ],
+    "PPC": [
+        {"name": "Google Ads", "patterns": ["googleadservices.com",
+                                            "googleads.g.doubleclick.net"]},
+    ],
+    "Performance Max": [
+        {"name": "Google Ads", "patterns": ["googleadservices.com",
+                                            "googleads.g.doubleclick.net"]},
+    ],
+    "TikTok": [
+        {"name": "TikTok Pixel", "patterns": ["analytics.tiktok.com"]},
+    ],
+    "WVID": [
+        {"name": "IDX tag", "patterns": ["rtactivate.com"]},
+    ],
+}
+
+PRODUCT_NAMES = list(PRODUCT_PIXELS.keys())
 
 # Well-known ad/analytics pixel endpoints. `vendor` is the display name;
 # `google` flags endpoints participating in Google Consent Mode, whose

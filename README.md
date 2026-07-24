@@ -86,3 +86,22 @@ banner visibility, Consent Mode, or pre-consent fires.
   browser via localStorage and the schedule panel stays hidden.
 - Cron setup unchanged: New > Cron Job, same repo/Dockerfile, Docker
   command "python batch_scan.py", schedule "0 11 * * *".
+
+## v0.5.0 - product-based pixel verification
+- New scan inputs: client website, optional conversion URLs (each page
+  is scanned with the same settings), and a Products multiselect
+  (Amazon, BARCK+, LinkedIn, Meta, Mobile, PPC, Performance Max,
+  TikTok, WVID).
+- Selecting a product means "this client bought it" - its pixels are
+  expected, and 0 firing is flagged as MISSING in the verdict and the
+  daily alert email. With nothing selected, all products are checked
+  and only those seen are reported.
+- Multi-pixel products report completeness: BARCK+ = Beeswax conversion
+  + Beeswax segment + Yahoo + Floodlight + Trade Desk, shown as e.g.
+  2/5 with per-pixel status. Each sub-pixel is marked post-consent
+  (gated + working), pre-consent only (working, not gated), or not
+  firing.
+- Recurring sites save their product selection; the cron job verifies
+  those products on every run and ALERT_ONLY flags missing products.
+- Endpoint map lives in PRODUCT_PIXELS in signatures.py - one dict
+  entry to add a product or sub-pixel.

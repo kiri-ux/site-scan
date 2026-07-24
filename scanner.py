@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-from signatures import (CMP_SIGNATURES, TRACKER_ENDPOINTS, DSP_ENDPOINTS,
+from signatures import (CMP_SIGNATURES, TRACKER_ENDPOINTS, PRODUCT_PIXELS,
                         ACCEPT_SELECTORS, GENERIC_ACCEPT_TEXT,
                         STRICT_ACCEPT_TEXT)
 
@@ -153,7 +153,7 @@ def _empty_result(url):
         "pre_consent": [],          # [{vendor, url, severity, note}]
         "accept_clicked": False,    # did the scan simulate clicking Accept
         "post_consent": [],         # tracker vendors that fired only after accept
-        "dsp_pixels": [],           # [{vendor, fired_pre, fired_post, sample_url}]
+        "products": [],             # [{product, expected, fired, pixels:[...]}]
         "verdict": None,
         "verdict_detail": None,
     }
@@ -202,7 +202,7 @@ def basic_scan(url, result=None):
 
 # ---------------------------------------------------------------- tier 2
 
-def full_scan(url):
+def full_scan(url, products=None):
     from playwright.sync_api import sync_playwright  # noqa: deferred import
 
     result = _empty_result(url)
@@ -392,19 +392,32 @@ def full_scan(url):
         {"vendor": v, "url": u[:220]}
         for v, u in sorted(post_vendors.items()) if v not in seen_vendors]
 
-    # DSP pixels: vendor-level "did it fire at all", pre vs post
-    for dsp in DSP_ENDPOINTS:
-        pre_hit = next((u for u in pre_urls
-                        if any(p in u for p in dsp["patterns"])), None)
-        post_hit = next((u for u in post_urls
-                         if any(p in u for p in dsp["patterns"])), None)
-        if pre_hit or post_hit:
-            result["dsp_pixels"].append({
-                "vendor": dsp["vendor"],
+    # Product pixels: per selected product (or ALL products in detect-any
+    # mode), which expected sub-pixels fired, pre vs post consent.
+    selected = products if products else list(PRODUCT_PIXELS.keys())
+    detect_any = not products
+    for prod in selected:
+        pixels = []
+        for px in PRODUCT_PIXELS.get(prod, []):
+            pre_hit = next((u for u in pre_urls
+                            if any(p in u for p in px["patterns"])), None)
+            post_hit = next((u for u in post_urls
+                             if any(p in u for p in px["patterns"])), None)
+            pixels.append({
+                "name": px["name"],
                 "fired_pre": bool(pre_hit),
                 "fired_post": bool(post_hit),
-                "sample_url": (post_hit or pre_hit)[:220],
+                "sample_url": ((post_hit or pre_hit) or "")[:220],
             })
+        fired = sum(1 for p in pixels if p["fired_pre"] or p["fired_post"])
+        if detect_any and fired == 0:
+            continue  # unselected + nothing fired = not this client's product
+        result["products"].append({
+            "product": prod,
+            "expected": len(pixels),
+            "fired": fired,
+            "pixels": pixels,
+        })
     return result
 
 
@@ -441,15 +454,20 @@ def _apply_verdict(r):
         ev = next((c["gtm_event"] for c in r["cmps"] if c["gtm_event"]), None)
         if ev:
             r["verdict_detail"] += f" GTM trigger event: {ev}"
-    if r.get("dsp_pixels"):
-        names = ", ".join(d["vendor"] for d in r["dsp_pixels"])
-        r["verdict_detail"] += f" DSP pixels detected: {names}."
+    prods = r.get("products") or []
+    if prods:
+        bits = [f"{p['product']} {p['fired']}/{p['expected']}" for p in prods]
+        r["verdict_detail"] += " Product pixels: " + ", ".join(bits) + "."
+        missing = [p["product"] for p in prods if p["fired"] == 0]
+        if missing:
+            r["verdict_detail"] += (" MISSING (expected but no pixels seen): "
+                                    + ", ".join(missing) + ".")
     return r
 
 
 # ---------------------------------------------------------------- entry
 
-def scan_site(raw_url, prefer_full=True):
+def scan_site(raw_url, prefer_full=True, products=None):
     url = normalize_url(raw_url)
     if not url:
         r = _empty_result(raw_url or "")
@@ -458,7 +476,7 @@ def scan_site(raw_url, prefer_full=True):
 
     if prefer_full:
         try:
-            return _apply_verdict(full_scan(url))
+            return _apply_verdict(full_scan(url, products=products))
         except ImportError:
             pass  # Playwright not installed - fall through to basic
         except Exception as e:

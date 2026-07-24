@@ -11,6 +11,7 @@ from flask import Flask, jsonify, render_template, request
 
 import db
 from scanner import scan_site, normalize_url
+from signatures import PRODUCT_NAMES
 
 app = Flask(__name__)
 
@@ -31,8 +32,11 @@ def index():
 @app.post("/scan")
 def scan():
     data = request.get_json(silent=True) or {}
+    products = [p for p in (data.get("products") or [])
+                if p in PRODUCT_NAMES]
     result = scan_site(data.get("url", ""),
-                       prefer_full=bool(data.get("full", True)))
+                       prefer_full=bool(data.get("full", True)),
+                       products=products or None)
     if result["ok"]:
         try:
             db.save_scan(result)
@@ -69,8 +73,10 @@ def upsert_site():
         return jsonify({"ok": False, "error": "Not a valid URL."}), 400
     if freq not in ("daily", "weekly", "off"):
         return jsonify({"ok": False, "error": "Bad frequency."}), 400
+    products = ",".join(p for p in (data.get("products") or [])
+                        if p in PRODUCT_NAMES)
     try:
-        db.upsert_site(url, freq)
+        db.upsert_site(url, freq, products)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
