@@ -223,6 +223,13 @@ PRODUCT_PIXELS = {
     "Mobile": [
         {"name": "xAd/GroundTruth", "patterns": ["bidagent.xad.com"]},
     ],
+    "YouTube": [
+        {"name": "Google Ads", "patterns": ["googleadservices.com",
+                                            "googleads.g.doubleclick.net"]},
+        {"name": "Google Analytics 4",
+         "patterns": ["google-analytics.com/g/collect",
+                      "analytics.google.com/g/collect"]},
+    ],
     "PPC": [
         {"name": "Google Ads", "patterns": ["googleadservices.com",
                                             "googleads.g.doubleclick.net"]},

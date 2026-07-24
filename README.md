@@ -431,3 +431,8 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Open decisions gains a launch-promo idea: free for the rest of 2026
   as the pilot, converting to paid Jan 1 - with the note that ToS and
   disclaimers still apply from day one.
+
+## v0.12.8
+- YouTube product added: checks Google Ads conversion/remarketing
+  (googleadservices, googleads.g.doubleclick.net) and GA4 pixels,
+  matching how YouTube campaigns actually track.
