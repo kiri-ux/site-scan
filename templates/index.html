@@ -503,6 +503,7 @@ function renderGroup(g){
       <span class="rg-name">${title}</span>
       <span class="rg-sub">${g.items.length} page${g.items.length>1?'s':''}</span>
       <span class="scanned">${when}</span>
+      <button class="rg-del" style="color:var(--velocity)" title="Load this run's client, URLs, and products back into the scan form to adjust and re-run" onclick="event.stopPropagation(); editRun('${g.key.replace(/'/g,"\\'")}')">Edit</button>
       <button class="rg-del" onclick="event.stopPropagation(); deleteGroup('${g.key.replace(/'/g,"\\'")}')">Delete</button>
       <span class="caret">&#9654;</span>
     </div>
@@ -517,6 +518,22 @@ function render(){
   $('empty').style.display = results.length ? 'none' : 'block';
   $('results').innerHTML = groupRuns().map(renderGroup).join('');
   $('csv').disabled = !results.length;
+}
+
+function editRun(key){
+  const g = groupRuns().find(x => x.key === key);
+  if (!g) return;
+  const main = mainItem(g);
+  $('client-name').value = g.name || '';
+  $('site-url').value = main.r.url;
+  $('urls').value = g.items.filter(it => it !== main).map(it => it.r.url).join('\n');
+  // selected products = products reported on the main page (selection mode
+  // reports all selected incl. 0-firing; detect-any reports fired only)
+  selectedProducts = (main.r.products || []).map(p => p.product)
+    .filter(p => PRODUCTS.includes(p));
+  renderChips();
+  showTab('scan');
+  window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 async function deleteGroup(key){

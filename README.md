@@ -179,3 +179,9 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Clear results button removed - per-run Delete covers removal, and
   refresh reloads server history anyway.
 - Accept-button wait trimmed 6s -> 4s.
+
+## v0.9.1
+- Edit button on each completed run loads its client name, main site,
+  conversion URLs, and product selection back into the scan form for
+  adjusting and re-running (the re-run is saved as a new run; the
+  original stays in history until deleted).
