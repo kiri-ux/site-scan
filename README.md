@@ -233,3 +233,12 @@ banner visibility, Consent Mode, or pre-consent fires.
   require GPC honoring (verified against current reporting at build
   time); NJ/MD/MN dates flagged for counsel verification.
 - /favicon.ico now redirects to the SVG favicon for stubborn browsers.
+
+## v0.10.1
+- Conversion URL pills strip trailing annotations like "(view-through)"
+  and reject non-URL text outright.
+- Scan requests carry a 150s client timeout and treat non-200 responses
+  as failures, so a mid-scan deploy or dead connection errors that page
+  and the batch continues instead of freezing.
+- gunicorn now writes access + error logs, so scan requests are visible
+  in Render Logs.

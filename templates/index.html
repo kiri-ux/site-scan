@@ -236,8 +236,20 @@ function renderConvPills(){
     box.insertBefore(pill, input);
   });
 }
+function cleanConvUrl(chunk){
+  // keep only the URL token: first whitespace-delimited piece, minus
+  // trailing punctuation - drops annotations like "(view-through)"
+  let u = chunk.trim().split(/\s+/)[0] || '';
+  u = u.replace(/^[("'\[<]+/, '').replace(/[)"'\]>,;.]+$/, '');
+  if (!u || u.startsWith('(')) return '';
+  const host = u.replace(/^https?:\/\//, '').split('/')[0];
+  if (!host.includes('.') || /\s/.test(u)) return ''; // not a URL
+  return u;
+}
 function addConvUrls(text){
-  text.split(/[\n,]/).map(s => s.trim()).filter(Boolean).forEach(u => {
+  text.split(/[\n,]/).forEach(chunk => {
+    const u = cleanConvUrl(chunk);
+    if (!u) return;
     const key = normUrl(u);
     if (!key) return;
     if (convUrls.some(x => normUrl(x) === key)) return;
@@ -534,18 +546,23 @@ async function run(){
       const i = nextIdx++;
       $('progress-label').textContent = `Scanning ${urls[i]}`;
       try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 150000);
         const resp = await fetch('/scan', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, run_id: runId, client_name: clientName}),
+          signal: ctrl.signal,
         });
+        clearTimeout(timer);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const r = await resp.json();
         r.scanned_local = stamp();
         insertResult(r);
       } catch (e) {
         insertResult({url: urls[i], ok:false, mode:'basic', verdict:'error',
           run_id: runId, client_name: clientName, scanned_local: stamp(),
-          verdict_detail:'Request failed - the scan may have timed out. Try again or use basic mode.',
+          verdict_detail:'Request failed or timed out - if a deploy was in progress, wait for it to finish and re-run this page.',
           cmps:[], pre_consent:[], gtm:{found:false,container_ids:[]},
           banner_visible:'unknown', consent_mode_default:'unknown', consent_defaults:{}});
       }
