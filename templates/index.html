@@ -318,7 +318,7 @@ function editSite(i){
 async function addSite(){
   const url = $('site-url').value.trim();
   if (!url) { $('site-url').focus(); return; }
-  const conv = $('urls').value.split('\n').map(s => s.trim()).filter(Boolean);
+  const conv = dedupeUrls(url, $('urls').value.split('\n')).slice(1);
   const resp = await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({url, frequency: $('sched-freq').value,
       products: selectedProducts, conversion_urls: conv,
@@ -514,9 +514,28 @@ function newRunId(){
   return (crypto.randomUUID ? crypto.randomUUID()
           : Date.now() + '-' + Math.random().toString(36).slice(2, 10));
 }
+function normUrl(u){
+  let s = (u || '').trim().toLowerCase();
+  if (!s) return '';
+  s = s.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+  return s;
+}
+function dedupeUrls(main, convLines){
+  const seen = new Set();
+  const out = [];
+  [main, ...convLines].forEach(u => {
+    const t = (u || '').trim();
+    if (!t) return;
+    const key = normUrl(t);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(t);
+  });
+  return out;
+}
 async function run(){
   const main = $('site-url').value.trim();
-  const urls = [main, ...$('urls').value.split('\n').map(s => s.trim())].filter(Boolean);
+  const urls = dedupeUrls(main, $('urls').value.split('\n'));
   if (!urls.length) return;
   const full = $('fullmode').checked;
   const runId = newRunId();

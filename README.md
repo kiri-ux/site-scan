@@ -151,3 +151,8 @@ banner visibility, Consent Mode, or pre-consent fires.
 - UI batches now run 2 scans in flight (4 in basic mode); the cron job
   scans SCAN_CONCURRENCY sites in parallel (default 2, max 4). On the
   2GB instance, 2 concurrent Chromiums is the safe ceiling.
+
+## v0.8.2
+- Conversion URLs that duplicate the client website (or each other,
+  ignoring http/https, www, and trailing slashes) are skipped in scans,
+  when saving to recurring, and in cron runs of previously saved sites.

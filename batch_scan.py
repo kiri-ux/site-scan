@@ -31,6 +31,16 @@ import db
 from scanner import scan_site
 
 
+def _norm(u):
+    s = (u or "").strip().lower()
+    for pref in ("https://", "http://"):
+        if s.startswith(pref):
+            s = s[len(pref):]
+    if s.startswith("www."):
+        s = s[4:]
+    return s.rstrip("/")
+
+
 def load_sites():
     # Prefer the UI-managed schedule when a database is connected.
     if db.enabled():
@@ -45,8 +55,12 @@ def load_sites():
                 name = s.get("client_name", "")
                 due.append((s["url"], prods, name))
                 if s.get("include_conversions", True):
-                    due.extend((c, prods, name)
-                               for c in s.get("conversion_urls", []))
+                    seen = {_norm(s["url"])}
+                    for c in s.get("conversion_urls", []):
+                        if _norm(c) in seen:
+                            continue
+                        seen.add(_norm(c))
+                        due.append((c, prods, name))
             if due:
                 return due
             print("Schedule table has no sites due today.")
