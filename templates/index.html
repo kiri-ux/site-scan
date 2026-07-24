@@ -186,7 +186,6 @@
     <div class="row">
       <button class="btn-primary" id="go">Scan sites</button>
       <button class="btn-ghost" id="csv" disabled>Download CSV</button>
-      <label class="chk"><input type="checkbox" id="fullmode" checked> Full scan (headless browser)</label>
       <span style="flex:1"></span>
       <select id="sched-freq" class="freq-select" title="Frequency for recurring scans">
         <option value="daily">Daily</option>
@@ -532,7 +531,7 @@ async function run(){
   convUrls = sanitizeConvList(convUrls); renderConvPills();
   const urls = dedupeUrls(main, convUrls);
   if (!urls.length) return;
-  const full = $('fullmode').checked;
+  const full = true; // always full - basic remains a server-side fallback
   const runId = newRunId();
   const clientName = $('client-name').value.trim();
   freshRunId = runId;

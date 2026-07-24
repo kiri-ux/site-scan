@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.10.8"
+SCANNER_REV = "0.10.9"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -717,6 +717,7 @@ class _BrowserPool:
             try:
                 import playwright.sync_api  # noqa: verify availability here
             except ImportError as e:
+                print(f"[scan] POOL INIT FAILED: {e!r}", flush=True)
                 self.init_error = e
                 return
             n = max(1, min(int(_os.environ.get("BROWSER_POOL", "2")), 4))
@@ -830,9 +831,14 @@ def scan_site(raw_url, prefer_full=True, products=None, states=None,
         try:
             return _apply_verdict(full_scan(url, products=products, states=states,
                                         site_checks=site_checks))
-        except ImportError:
-            pass  # Playwright not installed - fall through to basic
+        except ImportError as e:
+            print(f"[scan] POOL UNAVAILABLE (ImportError: {e}) - basic "
+                  f"fallback for {url}", flush=True)
         except Exception as e:
+            import traceback
+            print(f"[scan] FULL SCAN FAILED for {url}: {e!r} - basic "
+                  f"fallback. Trace:", flush=True)
+            traceback.print_exc()
             # Chromium missing/crashed etc. Fall back rather than fail.
             if "Executable doesn't exist" not in str(e) and \
                "playwright install" not in str(e).lower():

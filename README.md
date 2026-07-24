@@ -293,3 +293,11 @@ banner visibility, Consent Mode, or pre-consent fires.
   fires) piled up unanswered intercepts and context.close() hung
   forever draining them - wedging the pool worker on that page every
   run. Pages also unroute before close as a second guard.
+
+## v0.10.9 - loud fallback + always-full scans
+- When full_scan fails and the scanner silently falls back to basic
+  mode, the exception and traceback now print to the logs ("[scan]
+  FULL SCAN FAILED ..."). Silent fallback made the pool look broken
+  with no evidence; diagnosis was impossible.
+- Full-scan checkbox removed; every UI scan is a full scan. Basic mode
+  remains as the server-side resilience fallback only.
