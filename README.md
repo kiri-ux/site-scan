@@ -515,3 +515,8 @@ banner visibility, Consent Mode, or pre-consent fires.
   red CMP cell owns that story. Consent Mode stays when its defaults
   are actually set (real signal even without a recognized CMP), and
   error pages keep the full chain.
+
+## v0.13.3
+- Open decisions: added the partner-seeding idea - free first to the
+  highest-spend partners (Wheeler, LMSD) and partners with recent
+  tracking/consent issues, turning them into the case-study base.
