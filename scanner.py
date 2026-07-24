@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.10.10"
+SCANNER_REV = "0.11.2"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -544,6 +544,23 @@ def _full_scan_impl(browser, url, products=None, states=None,
                     {"state": s, "check": "GPC signal", "status": "pass",
                      "detail": "No ad trackers contacted on a GPC page "
                                "load."})
+        # Synthesized check: no CMP + no opt-out link + GPC not honored
+        # means NO mechanism for residents to opt out at all - the
+        # pattern state enforcement actually targets (e.g. Sephora).
+        # A banner itself isn't required under these opt-out laws, so
+        # "no CMP" alone is never flagged as a state failure.
+        gpc_ignored = result["gpc_tested"] and result["gpc_fires"]
+        if (not result["cmps"] and not result["optout_link"]
+                and (gpc_ignored or not cfg.get("gpc"))):
+            bits = ["no consent banner/CMP", "no opt-out link"]
+            if gpc_ignored:
+                bits.append("ad trackers contacted despite the GPC signal")
+            result["state_checks"].append(
+                {"state": s, "check": "Opt-out mechanism", "status": "fail",
+                 "detail": "No mechanism for residents to opt out was "
+                           "detected: " + ", ".join(bits) + ". Some "
+                           f"accessible opt-out method is expected for "
+                           f"{cfg['name']} targeting."})
         if cfg.get("optout_link"):
             if result["optout_link"]:
                 result["state_checks"].append(
@@ -780,7 +797,22 @@ def full_scan(url, products=None, states=None, site_checks=True):
 
 # ---------------------------------------------------------------- verdict
 
+def _dedupe_product_pixels(r):
+    """A pixel already reported under a product (e.g. Floodlight inside
+    BARCK+) shouldn't repeat in the general list on no-CMP pages - the
+    product section carries its consent state. CMP-bypass VIOLATIONS
+    stay listed even for product pixels: the bypass is the finding."""
+    prod_urls = {px["sample_url"] for p in r.get("products", [])
+                 for px in p.get("pixels", []) if px.get("sample_url")}
+    if prod_urls:
+        r["pre_consent"] = [
+            h for h in r.get("pre_consent", [])
+            if not (h["severity"] == "ungated" and h["url"] in prod_urls)]
+    return r
+
+
 def _apply_verdict(r):
+    _dedupe_product_pixels(r)
     if not r["ok"]:
         r["verdict"], r["verdict_detail"] = "error", r["error"]
         return r

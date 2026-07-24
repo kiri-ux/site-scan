@@ -336,3 +336,25 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Chain hover tooltips fixed: a tip containing double quotes broke the
   title attribute mid-string, killing hovers from that cell onward.
   Tips are escaped now; hover any chain cell for its explanation.
+
+## v0.11.1 - other pixels section
+- "Requests before consent" renamed "Other pixels", moved below the
+  Product pixels section, and rendered as an expander - collapsed by
+  default, auto-expanded (with a red count badge) when it contains
+  pre-consent violations on a CMP page.
+- Pixels already reported under a product (e.g. Floodlight inside
+  BARCK+) no longer repeat in the general list on no-CMP pages - the
+  product section carries their consent state. CMP-bypass violations
+  still list in both places deliberately: the bypass is the finding.
+
+## v0.11.2 - opt-out mechanism check, header tags, less repetition
+- New synthesized state check "Opt-out mechanism": fails when a state-
+  targeted page has no CMP, no opt-out link, AND (where required) ad
+  trackers fire despite GPC - i.e. no way for residents to opt out at
+  all, the pattern enforcement actually targets. A banner alone is
+  never flagged as legally required (US state laws are opt-out
+  regimes), keeping the check-based language honest.
+- Run headers show product marks (BARCK+ 5/5 with check/x) and state
+  target tags from the main site.
+- Page rows no longer repeat the chain and verdict - the client
+  summary owns them. Error/basic pages keep their message box.

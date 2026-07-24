@@ -99,10 +99,11 @@ function renderSite(r, i){
       `<li><div><b>${c.name}</b> <span class="evidence">${(c.evidence||[]).join(' &middot; ')}</span>
         ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}</div></li>`).join('') + `</ul>` : '';
 
-  const fires = r.pre_consent.length ? `<h3>Requests before consent</h3><ul>` + r.pre_consent.map(h =>
+  const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
+  const fires = r.pre_consent.length ? `<details class="prod"${preViol ? ' open' : ''}><summary><b>Other pixels</b> <span class="pill">${r.pre_consent.length}</span>${preViol ? ` <span class="badge bad">${preViol} pre-consent</span>` : ''}<span class="caret">&#9654;</span></summary><ul>` + r.pre_consent.map(h =>
       `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}">${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
-        <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
-    : (r.mode === 'full' && r.ok ? `<h3>Requests before consent</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
+        <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul></details>`
+    : (r.mode === 'full' && r.ok ? `<details class="prod"><summary><b>Other pixels</b> <span class="pill">0</span><span class="caret">&#9654;</span></summary><p class="kv" style="padding:8px 12px">No known ad/analytics endpoints were contacted before consent on this page.</p></details>` : '');
 
   const pxBadge = px => !px.fired_pre && !px.fired_post
         ? '<span class="badge bad">not firing</span>'
@@ -154,10 +155,9 @@ function renderSite(r, i){
       <span class="caret">&#9654;</span>
     </div>
     <div class="site-body">
-      ${chain}
-      <div class="verdict ${meta.cls}">${(r.verdict_lines && r.verdict_lines.length ? r.verdict_lines : [r.verdict_detail || r.error || '']).map(l => `<div class="vline">${l}</div>`).join('')}</div>
+      ${r.verdict === 'error' || r.mode !== 'full' ? `<div class="verdict ${meta.cls}">${(r.verdict_lines && r.verdict_lines.length ? r.verdict_lines : [r.verdict_detail || r.error || '']).map(l => `<div class="vline">${l}</div>`).join('')}</div>` : ''}
       ${kvBits.length ? `<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px">${kvBits.join('')}</div>` : ''}
-      <div class="detail">${cmpDetail}${fires}${rejFires}${dspDetail}${gated}</div>
+      <div class="detail">${cmpDetail}${rejFires}${dspDetail}${fires}${gated}</div>
     </div>
   </div>`;
 }
