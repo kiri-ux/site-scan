@@ -44,6 +44,14 @@ def init_db():
             );
             ALTER TABLE schedule
                 ADD COLUMN IF NOT EXISTS products TEXT NOT NULL DEFAULT '';
+            ALTER TABLE schedule
+                ADD COLUMN IF NOT EXISTS conversion_urls TEXT
+                    NOT NULL DEFAULT '';
+            ALTER TABLE schedule
+                ADD COLUMN IF NOT EXISTS include_conversions BOOLEAN
+                    NOT NULL DEFAULT TRUE;
+            ALTER TABLE schedule
+                ADD COLUMN IF NOT EXISTS client_name TEXT NOT NULL DEFAULT '';
         """)
 
 
@@ -60,37 +68,57 @@ def recent_scans(limit=200):
         return []
     with _conn() as cn, cn.cursor() as cur:
         cur.execute("""
-            SELECT result, to_char(scanned_at AT TIME ZONE 'UTC',
-                                   'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+            SELECT id, result, to_char(scanned_at AT TIME ZONE 'UTC',
+                                       'YYYY-MM-DD"T"HH24:MI:SS"Z"')
             FROM scans ORDER BY scanned_at DESC LIMIT %s""", (limit,))
         out = []
-        for result, iso in cur.fetchall():
+        for sid, result, iso in cur.fetchall():
             r = result if isinstance(result, dict) else json.loads(result)
+            r["_id"] = sid
             r["scanned_at_iso"] = iso
             out.append(r)
         return out
+
+
+def delete_scans(ids):
+    ids = [int(i) for i in ids]
+    if not ids:
+        return
+    with _conn() as cn, cn.cursor() as cur:
+        cur.execute("DELETE FROM scans WHERE id = ANY(%s)", (ids,))
 
 
 def list_sites():
     if not enabled():
         return []
     with _conn() as cn, cn.cursor() as cur:
-        cur.execute(
-            "SELECT url, frequency, products FROM schedule ORDER BY url")
+        cur.execute("""SELECT url, frequency, products, conversion_urls,
+                              include_conversions, client_name
+                       FROM schedule ORDER BY client_name, url""")
         return [{"url": u, "frequency": f,
-                 "products": [p for p in (pr or "").split(",") if p]}
-                for u, f, pr in cur.fetchall()]
+                 "products": [p for p in (pr or "").split(",") if p],
+                 "conversion_urls": [c for c in (cv or "").splitlines() if c.strip()],
+                 "include_conversions": bool(inc),
+                 "client_name": name or ""}
+                for u, f, pr, cv, inc, name in cur.fetchall()]
 
 
-def upsert_site(url, frequency, products=""):
+def upsert_site(url, frequency, products="", conversion_urls="",
+                include_conversions=True, client_name=""):
     with _conn() as cn, cn.cursor() as cur:
         cur.execute("""
-            INSERT INTO schedule (url, frequency, products)
-            VALUES (%s, %s, %s)
+            INSERT INTO schedule (url, frequency, products,
+                                  conversion_urls, include_conversions,
+                                  client_name)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (url) DO UPDATE
                 SET frequency = EXCLUDED.frequency,
-                    products = EXCLUDED.products
-        """, (url, frequency, products))
+                    products = EXCLUDED.products,
+                    conversion_urls = EXCLUDED.conversion_urls,
+                    include_conversions = EXCLUDED.include_conversions,
+                    client_name = EXCLUDED.client_name
+        """, (url, frequency, products, conversion_urls,
+              bool(include_conversions), client_name[:200]))
 
 
 def delete_site(url):

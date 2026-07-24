@@ -403,11 +403,17 @@ def full_scan(url, products=None):
                             if any(p in u for p in px["patterns"])), None)
             post_hit = next((u for u in post_urls
                              if any(p in u for p in px["patterns"])), None)
+            hit_url = (post_hit or pre_hit) or ""
             pixels.append({
                 "name": px["name"],
                 "fired_pre": bool(pre_hit),
                 "fired_post": bool(post_hit),
-                "sample_url": ((post_hit or pre_hit) or "")[:220],
+                "sample_url": hit_url[:220],
+                # Unreplaced trafficking macros like [ORDER] or {orderid}
+                # mean the template was pasted without filling values.
+                "macro_warning": bool(re.search(
+                    r"(\[[A-Za-z_][A-Za-z0-9_ -]+\]|"
+                    r"(?<!\$)\{[A-Za-z_][A-Za-z0-9_ -]+\})", hit_url)),
             })
         fired = sum(1 for p in pixels if p["fired_pre"] or p["fired_post"])
         if detect_any and fired == 0:

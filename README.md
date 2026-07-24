@@ -105,3 +105,26 @@ banner visibility, Consent Mode, or pre-consent fires.
   those products on every run and ALERT_ONLY flags missing products.
 - Endpoint map lives in PRODUCT_PIXELS in signatures.py - one dict
   entry to add a product or sub-pixel.
+
+## v0.6.0 - collapsed history, scheduled conversion URLs
+- Restored results load collapsed (newest first); only a lone fresh scan
+  auto-expands. New scans appear at the top.
+- Adding a recurring site now saves the conversion URLs from the scan
+  form along with the products. Recurring runs scan the main site plus
+  its conversion URLs by default; the per-site "N conv URLs" checkbox
+  turns that off without deleting the list.
+
+## v0.7.0 - client runs, deletion, collapsed products, macro warnings
+- Client name input; saved on every scan and on scheduled sites.
+- A scan run (client site + conversion URLs) renders as ONE panel named
+  for the client, with per-page results inside and a worst-case status
+  badge. Panels load collapsed; only the run just scanned auto-expands.
+- Delete button per run removes it from server history (or local
+  storage when no DB).
+- Product pixel sections are collapsed by default - the header shows
+  x/y firing plus a missing/partial/firing badge; expand for per-pixel
+  detail.
+- Pixel URLs containing unreplaced trafficking macros like [ORDER] or
+  {orderid} get an "unfilled macros" warning - the tag fires but sends
+  blank conversion data. ${GDPR}-style consent macros are expected and
+  not flagged.

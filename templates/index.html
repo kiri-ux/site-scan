@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Consent Scanner</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -75,6 +76,26 @@
   .sched-row .surl{flex:1;word-break:break-all}
   .sched-row .rm{background:none;border:none;color:var(--bad);font-size:13px;font-weight:600;cursor:pointer;padding:4px 8px}
   .sched-empty{color:var(--muted);font-size:13.5px;padding:6px 0}
+  .rungroup{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden}
+  .rg-head{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;border-left:4px solid var(--gold)}
+  .rg-head:hover{background:#FAFAF7}
+  .rg-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;letter-spacing:.03em;color:var(--atlas)}
+  .rg-sub{font-size:12.5px;color:var(--muted)}
+  .rg-del{background:none;border:none;color:var(--bad);font-size:12.5px;font-weight:600;cursor:pointer;padding:4px 8px}
+  .rg-body{display:none;border-top:1px solid var(--line);padding:12px 14px;background:#FBFAF7}
+  .rungroup.open .rg-body{display:block}
+  .rungroup.open .rg-head .caret{transform:rotate(90deg)}
+  .rg-body .site{margin-bottom:10px}
+  .rg-body .site:last-child{margin-bottom:0}
+  details.prod{margin:0 0 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  details.prod summary{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;list-style:none;font-size:14px}
+  details.prod summary::-webkit-details-marker{display:none}
+  details.prod summary .caret{margin-left:auto}
+  details.prod[open] summary .caret{transform:rotate(90deg)}
+  details.prod ul{padding:4px 12px 8px}
+  .macro-warn{color:var(--warn);font-size:12.5px}
+  .conv-toggle{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);white-space:nowrap;cursor:pointer}
+  .conv-toggle input:disabled{cursor:default}
   .site.open .caret{transform:rotate(90deg)}
 
   .site-body{display:none;border-top:1px solid var(--line);padding:18px}
@@ -118,12 +139,14 @@
 <header>
   <h1>Consent Scanner</h1>
   <span class="sub">CMP detection &middot; consent chain check &middot; pre-consent pixel capture</span>
-  <span class="build">BUILD {{ build }}</span>
+  <span class="build">BUILD {{ build }} &middot; DEPLOYED {{ deployed }}</span>
 </header>
 
 <main>
   <section class="panel">
     <h2>Scan a client</h2>
+    <label class="field-label" for="client-name">Client name</label>
+    <input id="client-name" type="text" class="text-input" placeholder="Town &amp; Country Ford">
     <label class="field-label" for="site-url">Client website</label>
     <input id="site-url" type="text" class="text-input" placeholder="clientsite.com">
     <label class="field-label" for="urls">Conversion URLs to check <span class="opt">(optional, one per line - landing pages, thank-you pages)</span></label>
@@ -146,7 +169,7 @@
 
   <section class="panel" id="sched-panel" style="display:none">
     <h2>Recurring scans</h2>
-    <p class="hint" style="margin:0 0 12px">These sites run automatically on the scheduled cron job. Daily sites run every day; weekly sites run Mondays; off pauses a site without removing it. The products selected above are saved with the site when you add it.</p>
+    <p class="hint" style="margin:0 0 12px">These sites run automatically on the scheduled cron job. Daily sites run every day; weekly sites run Mondays; off pauses a site without removing it. The products and conversion URLs entered above are saved with the site when you add it; the checkbox controls whether recurring runs also scan the conversion URLs.</p>
     <div class="row" style="margin:0 0 12px">
       <input id="sched-url" type="text" placeholder="clientsite.com" style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font:14px 'Barlow',sans-serif;background:#FCFCFB">
       <select id="sched-freq" class="freq-select">
@@ -209,44 +232,64 @@ async function restoreResults(){
 }
 
 // ---- recurring scan schedule ----
+let schedSites = [];
 async function loadSchedule(){
   try {
     const d = await (await fetch('/sites')).json();
     if (!d.enabled) return; // no DB - keep panel hidden
     $('sched-panel').style.display = 'block';
+    schedSites = d.sites || [];
     const list = $('sched-list');
-    if (!d.sites.length){
+    if (!schedSites.length){
       list.innerHTML = '<div class="sched-empty">No sites scheduled yet. Add a client site above to start recurring scans.</div>';
       return;
     }
-    list.innerHTML = d.sites.map(s => `
+    list.innerHTML = schedSites.map((s, i) => `
       <div class="sched-row">
-        <span class="surl">${s.url}${(s.products||[]).length ? ` <span class="prod-tags">${s.products.join(' &middot; ')}</span>` : ''}</span>
-        <select class="freq-select" onchange='setFreq(${JSON.stringify(s.url)}, this.value, ${JSON.stringify(s.products||[])})'>
+        <span class="surl">${s.client_name ? `<b>${s.client_name}</b> &middot; ` : ''}${s.url}${(s.products||[]).length ? ` <span class="prod-tags">${s.products.join(' &middot; ')}</span>` : ''}</span>
+        <label class="conv-toggle" title="Also scan this site's saved conversion URLs on each recurring run">
+          <input type="checkbox" ${s.include_conversions ? 'checked' : ''}
+                 ${(s.conversion_urls||[]).length ? '' : 'disabled'}
+                 onchange="patchSite(${i}, {include_conversions: this.checked})">
+          ${(s.conversion_urls||[]).length} conv URLs
+        </label>
+        <select class="freq-select" onchange="patchSite(${i}, {frequency: this.value})">
           <option value="daily" ${s.frequency==='daily'?'selected':''}>Daily</option>
           <option value="weekly" ${s.frequency==='weekly'?'selected':''}>Weekly</option>
           <option value="off" ${s.frequency==='off'?'selected':''}>Off</option>
         </select>
-        <button class="rm" onclick="removeSite('${s.url.replace(/'/g,"\\'")}')">Remove</button>
+        <button class="rm" onclick="removeSite(${i})">Remove</button>
       </div>`).join('');
   } catch(e){ /* panel stays hidden */ }
 }
-async function setFreq(url, frequency, products){
+async function patchSite(i, patch){
+  const s = schedSites[i];
   await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({url, frequency, products: products || []})});
+    body: JSON.stringify({
+      url: s.url,
+      frequency: patch.frequency ?? s.frequency,
+      products: s.products || [],
+      conversion_urls: s.conversion_urls || [],
+      include_conversions: patch.include_conversions ?? s.include_conversions,
+      client_name: s.client_name || '',
+    })});
   loadSchedule();
 }
-async function removeSite(url){
-  if (!confirm(`Remove ${url} from recurring scans?`)) return;
+async function removeSite(i){
+  const s = schedSites[i];
+  if (!confirm(`Remove ${s.url} from recurring scans?`)) return;
   await fetch('/sites/delete', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({url})});
+    body: JSON.stringify({url: s.url})});
   loadSchedule();
 }
 async function addSite(){
   const url = $('sched-url').value.trim();
   if (!url) return;
+  const conv = $('urls').value.split('\n').map(s => s.trim()).filter(Boolean);
   const resp = await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({url, frequency: $('sched-freq').value, products: selectedProducts})});
+    body: JSON.stringify({url, frequency: $('sched-freq').value,
+      products: selectedProducts, conversion_urls: conv,
+      include_conversions: true, client_name: $('client-name').value.trim()})});
   if (resp.ok) $('sched-url').value = '';
   loadSchedule();
 }
@@ -321,11 +364,16 @@ function renderSite(r, i){
         : px.fired_pre && !px.fired_post
         ? '<span class="badge warn">pre-consent only</span>'
         : '<span class="badge ok">' + (px.fired_pre ? 'pre + post' : 'post-consent') + '</span>';
-  const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>Product pixels</h3>` + (prods.length ? prods.map(p =>
-      `<div style="margin:0 0 10px"><b>${p.product}</b> <span class="pill">${p.fired}/${p.expected} firing</span>
+  const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>Product pixels</h3>` + (prods.length ? prods.map(p => {
+      const anyMacro = p.pixels.some(px => px.macro_warning);
+      const stateBadge = p.fired === 0 ? '<span class="badge bad">missing</span>'
+                       : p.fired < p.expected ? '<span class="badge warn">partial</span>'
+                       : '<span class="badge ok">firing</span>';
+      return `<details class="prod"><summary><b>${p.product}</b> <span class="pill">${p.fired}/${p.expected} firing</span> ${stateBadge}${anyMacro ? ' <span class="macro-warn">unfilled macros</span>' : ''}<span class="caret">&#9654;</span></summary>
        <ul>` + p.pixels.map(px =>
-        `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ' <span class="evidence">working, but should be consent-gated</span>' : ''}
-         ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></div>`).join('')
+        `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ' <span class="evidence">working, but should be consent-gated</span>' : ''}${px.macro_warning ? ' <span class="macro-warn">pixel URL contains unreplaced macros like [ORDER] - the template was pasted without filling values, so conversion data will be blank</span>' : ''}
+         ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></details>`;
+    }).join('')
     : `<p class="kv">${r.accept_clicked ? 'No product pixels observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';
 
   const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>
@@ -349,20 +397,86 @@ function renderSite(r, i){
   </div>`;
 }
 
-function render(){
-  $('empty').style.display = results.length ? 'none' : 'block';
-  $('results').innerHTML = results.map(renderSite).join('');
-  $('csv').disabled = !results.length;
-  $('clear').disabled = !results.length;
-  // auto-open single result
-  if (results.length === 1) document.querySelector('.site')?.classList.add('open');
+let freshCount = 0;    // scans completed in this page session
+let freshRunId = null; // run started in this session (auto-expands)
+
+function groupRuns(){
+  const groups = []; const byKey = {};
+  results.forEach((r, i) => {
+    const key = r.run_id || `solo-${r._id ?? i}`;
+    if (!byKey[key]) {
+      byKey[key] = {key, name: r.client_name || '', items: []};
+      groups.push(byKey[key]);
+    }
+    byKey[key].items.push({r, i});
+    if (!byKey[key].name && r.client_name) byKey[key].name = r.client_name;
+  });
+  return groups;
 }
 
+const VERDICT_RANK = {error:0, no_cmp:0, misconfigured:0, cmp_found_basic:1, ok:2};
+function groupBadge(items){
+  let worst = 2;
+  items.forEach(({r}) => { worst = Math.min(worst, VERDICT_RANK[r.verdict] ?? 0); });
+  const anyMissing = items.some(({r}) => (r.products||[]).some(p => p.fired === 0));
+  if (worst === 0 || anyMissing) return '<span class="badge bad">needs attention</span>';
+  if (worst === 1) return '<span class="badge neutral">basic</span>';
+  return '<span class="badge ok">looks good</span>';
+}
+
+function renderGroup(g){
+  const first = g.items[0].r;
+  const title = g.name || first.url;
+  const when = first.scanned_local || first.scanned_at || '';
+  const open = g.key === freshRunId ? ' open' : '';
+  return `<div class="rungroup${open}" data-key="${g.key}">
+    <div class="rg-head" onclick="this.parentElement.classList.toggle('open')">
+      ${groupBadge(g.items)}
+      <span class="rg-name">${title}</span>
+      <span class="rg-sub">${g.items.length} page${g.items.length>1?'s':''}</span>
+      <span class="scanned">${when}</span>
+      <button class="rg-del" onclick="event.stopPropagation(); deleteGroup('${g.key.replace(/'/g,"\\'")}')">Delete</button>
+      <span class="caret">&#9654;</span>
+    </div>
+    <div class="rg-body">${g.items.map(({r, i}) => renderSite(r, i)).join('')}</div>
+  </div>`;
+}
+
+function render(){
+  $('empty').style.display = results.length ? 'none' : 'block';
+  $('results').innerHTML = groupRuns().map(renderGroup).join('');
+  $('csv').disabled = !results.length;
+  $('clear').disabled = !results.length;
+}
+
+async function deleteGroup(key){
+  const g = groupRuns().find(x => x.key === key);
+  if (!g) return;
+  const label = g.name || g.items[0].r.url;
+  if (!confirm(`Delete this scan of ${label} (${g.items.length} page${g.items.length>1?'s':''})?`)) return;
+  const ids = g.items.map(({r}) => r._id).filter(id => id != null);
+  if (dbEnabled && ids.length){
+    await fetch('/scans/delete', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ids})});
+  }
+  const drop = new Set(g.items.map(({i}) => i));
+  results = results.filter((_, idx) => !drop.has(idx));
+  saveResults();
+  render();
+}
+
+function newRunId(){
+  return (crypto.randomUUID ? crypto.randomUUID()
+          : Date.now() + '-' + Math.random().toString(36).slice(2, 10));
+}
 async function run(){
   const main = $('site-url').value.trim();
   const urls = [main, ...$('urls').value.split('\n').map(s => s.trim())].filter(Boolean);
   if (!urls.length) return;
   const full = $('fullmode').checked;
+  const runId = newRunId();
+  const clientName = $('client-name').value.trim();
+  freshRunId = runId;
   results = []; render();
   $('go').disabled = true;
   $('progress').style.display = 'flex';
@@ -375,13 +489,18 @@ async function run(){
       const resp = await fetch('/scan', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({url: urls[i], full, products: selectedProducts}),
+        body: JSON.stringify({url: urls[i], full, products: selectedProducts, run_id: runId, client_name: clientName}),
       });
       const r = await resp.json();
       r.scanned_local = new Date().toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
-      results.push(r);
+      // keep this run's pages in scan order while the run stays newest-first
+      const lastOfRun = results.findLastIndex(x => x.run_id === runId);
+      results.splice(lastOfRun >= 0 ? lastOfRun + 1 : 0, 0, r);
+      freshCount++;
     } catch (e) {
-      results.push({url: urls[i], ok:false, mode:'basic', verdict:'error',
+      freshCount++;
+      results.unshift({url: urls[i], ok:false, mode:'basic', verdict:'error',
+        run_id: runId, client_name: clientName,
         scanned_local: new Date().toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}),
         verdict_detail:'Request failed - the scan may have timed out. Try again or use basic mode.',
         cmps:[], pre_consent:[], gtm:{found:false,container_ids:[]},
@@ -397,13 +516,13 @@ async function run(){
 
 function toCsv(){
   const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const head = ['url','verdict','mode','cmp','gtm_trigger_event','banner_visible',
+  const head = ['client_name','url','verdict','mode','cmp','gtm_trigger_event','banner_visible',
                 'consent_mode_default','consent_defaults','gtm_container_ids',
                 'pre_consent_violations','pre_consent_warnings','accept_clicked',
                 'product_pixels','products_missing',
                 'trackers_fired_after_accept','detail','scanned_at'];
   const rows = results.map(r => [
-    r.url, r.verdict, r.mode,
+    r.client_name || '', r.url, r.verdict, r.mode,
     r.cmps.map(c => c.name).join('; '),
     r.cmps.map(c => c.gtm_event).find(Boolean) || '',
     r.banner_visible, r.consent_mode_default,

@@ -36,10 +36,17 @@ def load_sites():
     if db.enabled():
         try:
             monday = datetime.now(timezone.utc).weekday() == 0
-            due = [(s["url"], s.get("products") or None)
-                   for s in db.list_sites()
-                   if s["frequency"] == "daily"
-                   or (s["frequency"] == "weekly" and monday)]
+            due = []
+            for s in db.list_sites():
+                if not (s["frequency"] == "daily"
+                        or (s["frequency"] == "weekly" and monday)):
+                    continue
+                prods = s.get("products") or None
+                name = s.get("client_name", "")
+                due.append((s["url"], prods, name))
+                if s.get("include_conversions", True):
+                    due.extend((c, prods, name)
+                               for c in s.get("conversion_urls", []))
             if due:
                 return due
             print("Schedule table has no sites due today.")
@@ -53,7 +60,7 @@ def load_sites():
     for chunk in raw.replace(",", "\n").splitlines():
         s = chunk.strip()
         if s and not s.startswith("#"):
-            sites.append((s, None))
+            sites.append((s, None, ""))
     return sites
 
 
@@ -139,8 +146,9 @@ def main():
 
     print(f"Scanning {len(sites)} sites...")
     results = []
-    for s, prods in sites:
+    for s, prods, name in sites:
         r = scan_site(s, prefer_full=True, products=prods)
+        r["client_name"] = name
         results.append(r)
         if r["ok"]:
             try:
