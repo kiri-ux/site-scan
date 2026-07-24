@@ -41,3 +41,33 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Batches run sequentially from the browser (one request per site), so
   the server stays stateless. For adtini, dev should move this to an
   async job queue.
+
+## v0.2.0 - consent simulation + DSP pixel verification
+- After the pre-consent capture, the scanner clicks the CMP's Accept
+  button (known selectors for all 14 CMPs + a generic text fallback) and
+  watches a second window of network traffic.
+- DSP pixels (BARCK+/Beeswax, The Trade Desk, Yahoo DSP, CM360/DV360
+  Floodlight) are reported vendor-level: fired pre-consent, post-consent,
+  or both. "Post only" = gated and working. "Pre only" = working but not
+  consent-gated. Edit DSP_ENDPOINTS in signatures.py to add vendors.
+- Trackers that fire ONLY after Accept are listed as gated-correctly -
+  this is the "is the pixel working" verification.
+- Caveat: DSP conversion/segment pixels often live on inner pages or fire
+  on events (form submit, purchase) rather than page load - scan the page
+  where the pixel is actually placed, and treat "none seen" as "not on
+  this page," not "not on this site."
+
+## v0.3.0 - persistence, timestamps, scheduled scans
+- Scan results persist in the browser (localStorage, last 200) and
+  survive refresh. "Clear results" wipes them. Note: per-browser - a
+  different machine/profile starts empty.
+- Each result card shows its scan date + time (viewer's local time).
+- batch_scan.py runs the same scans headlessly for a Render Cron Job:
+  New > Cron Job on the same repo (Docker runtime, Standard instance),
+  Docker command "python batch_scan.py", schedule e.g. "0 11 * * *"
+  (daily 7am ET during EDT / 11:00 UTC).
+  Sites: SITES env var (comma/newline separated) or sites.txt in repo.
+  Email: set SES_FROM, SES_TO, AWS_REGION, AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY to receive the CSV report. ALERT_ONLY=1 emails
+  only when a site is flagged (no CMP, pre-consent fires, ungated DSP
+  pixels, or scan errors) - silence means all clean.

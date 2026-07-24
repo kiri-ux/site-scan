@@ -57,7 +57,8 @@
   .badge.bad{background:var(--bad-bg);color:var(--bad)}
   .badge.neutral{background:var(--info-bg);color:var(--velocity)}
   .site-head .cmp-name{font-size:13px;color:var(--muted);white-space:nowrap}
-  .caret{margin-left:auto;color:var(--muted);transition:transform .2s;font-size:12px}
+  .caret{color:var(--muted);transition:transform .2s;font-size:12px}
+  .scanned{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
   .site.open .caret{transform:rotate(90deg)}
 
   .site-body{display:none;border-top:1px solid var(--line);padding:18px}
@@ -112,6 +113,7 @@
     <div class="row">
       <button class="btn-primary" id="go">Scan sites</button>
       <button class="btn-ghost" id="csv" disabled>Download CSV</button>
+      <button class="btn-ghost" id="clear" disabled>Clear results</button>
       <label class="chk"><input type="checkbox" id="fullmode" checked> Full scan (headless browser)</label>
     </div>
     <div class="progress" id="progress">
@@ -128,7 +130,19 @@
 
 <script>
 const $ = id => document.getElementById(id);
+const STORE_KEY = 'consent-scan-results-v1';
 let results = [];
+
+function saveResults(){
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(results.slice(-200))); }
+  catch(e){ /* storage full or blocked - results just won't persist */ }
+}
+function restoreResults(){
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) { results = JSON.parse(raw) || []; render(); }
+  } catch(e){ results = []; }
+}
 
 const VERDICT_META = {
   ok:              {cls:'ok',      label:'Looks good'},
@@ -158,6 +172,12 @@ function renderSite(r, i){
   const fireLabel = r.mode !== 'full' ? 'Unknown'
                   : viol.length ? `${viol.length} firing` : (warns.length ? 'Verify' : 'None');
 
+  const dsps = r.dsp_pixels || [];
+  const dspState = dsps.length ? 'pass' : (r.mode === 'full' ? 'mid' : 'mid');
+  const dspLabel = r.mode !== 'full' ? 'Unknown'
+                 : dsps.length ? dsps.map(d => d.vendor.split(' ')[0]).join(', ')
+                 : (r.accept_clicked ? 'None seen' : 'None (no accept)');
+
   const fmt = v => v === true ? 'Yes' : v === false ? 'No' : 'Unknown';
 
   const chain = `<div class="chain">
@@ -165,6 +185,7 @@ function renderSite(r, i){
       ${chainLink('Banner visible', fmt(r.banner_visible), bannerState)}
       ${chainLink('Consent Mode default', fmt(r.consent_mode_default), cmState)}
       ${chainLink('Pre-consent trackers', fireLabel, fireState)}
+      ${chainLink('DSP pixels', dspLabel, dspState)}
     </div>`;
 
   const gtmEvent = r.cmps.map(c => c.gtm_event).find(Boolean);
@@ -183,19 +204,29 @@ function renderSite(r, i){
         <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Requests before consent</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
+  const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>DSP pixels</h3>` + (dsps.length ? `<ul>` + dsps.map(d =>
+      `<li><span class="badge ${d.fired_pre && !d.fired_post ? 'warn' : 'ok'}">${d.fired_pre && d.fired_post ? 'pre + post' : d.fired_post ? 'post-consent' : 'pre-consent'}</span>
+        <div><b>${d.vendor}</b>${d.fired_pre && !d.fired_post ? ' <span class="evidence">fired before consent only - working, but should be consent-gated</span>' : d.fired_post && !d.fired_pre ? ' <span class="evidence">fired after accept - gated and working</span>' : ''}
+        <div class="u">${d.sample_url}</div></div></li>`).join('') + `</ul>`
+    : `<p class="kv">${r.accept_clicked ? 'No BARCK+ / Trade Desk / Yahoo / Floodlight requests observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';
+
+  const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>
+      `<li><span class="badge ok">post-consent</span><div><b>${h.vendor}</b><div class="u">${h.url}</div></div></li>`).join('') + `</ul>` : '';
+
   return `<div class="site" id="site-${i}">
     <div class="site-head" onclick="this.parentElement.classList.toggle('open')">
       <span class="badge ${meta.cls}">${meta.label}</span>
       <span class="site-url">${r.url}</span>
       ${cmpNames ? `<span class="cmp-name">${cmpNames}</span>` : ''}
       <span class="badge neutral">${r.mode}</span>
+      <span class="scanned">${r.scanned_local || r.scanned_at || ''}</span>
       <span class="caret">&#9654;</span>
     </div>
     <div class="site-body">
       ${chain}
       <div class="verdict ${meta.cls}">${r.verdict_detail || r.error || ''}</div>
       ${kvBits.length ? `<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px">${kvBits.join('')}</div>` : ''}
-      <div class="detail">${cmpDetail}${fires}</div>
+      <div class="detail">${cmpDetail}${fires}${dspDetail}${gated}</div>
     </div>
   </div>`;
 }
@@ -204,6 +235,7 @@ function render(){
   $('empty').style.display = results.length ? 'none' : 'block';
   $('results').innerHTML = results.map(renderSite).join('');
   $('csv').disabled = !results.length;
+  $('clear').disabled = !results.length;
   // auto-open single result
   if (results.length === 1) document.querySelector('.site')?.classList.add('open');
 }
@@ -226,13 +258,17 @@ async function run(){
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({url: urls[i], full}),
       });
-      results.push(await resp.json());
+      const r = await resp.json();
+      r.scanned_local = new Date().toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
+      results.push(r);
     } catch (e) {
       results.push({url: urls[i], ok:false, mode:'basic', verdict:'error',
+        scanned_local: new Date().toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}),
         verdict_detail:'Request failed - the scan may have timed out. Try again or use basic mode.',
         cmps:[], pre_consent:[], gtm:{found:false,container_ids:[]},
         banner_visible:'unknown', consent_mode_default:'unknown', consent_defaults:{}});
     }
+    saveResults();
     render();
   }
   $('bar-fill').style.width = '100%';
@@ -244,7 +280,9 @@ function toCsv(){
   const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const head = ['url','verdict','mode','cmp','gtm_trigger_event','banner_visible',
                 'consent_mode_default','consent_defaults','gtm_container_ids',
-                'pre_consent_violations','pre_consent_warnings','detail','scanned_at'];
+                'pre_consent_violations','pre_consent_warnings','accept_clicked',
+                'dsp_pixels_fired','dsp_fired_pre_consent_only',
+                'trackers_fired_after_accept','detail','scanned_at'];
   const rows = results.map(r => [
     r.url, r.verdict, r.mode,
     r.cmps.map(c => c.name).join('; '),
@@ -254,7 +292,11 @@ function toCsv(){
     (r.gtm?.container_ids || []).join('; '),
     r.pre_consent.filter(h=>h.severity==='violation').map(h=>h.vendor).join('; '),
     r.pre_consent.filter(h=>h.severity==='warn').map(h=>h.vendor).join('; '),
-    r.verdict_detail || r.error || '', r.scanned_at || '',
+    r.accept_clicked,
+    (r.dsp_pixels||[]).map(d=>d.vendor).join('; '),
+    (r.dsp_pixels||[]).filter(d=>d.fired_pre && !d.fired_post).map(d=>d.vendor).join('; '),
+    (r.post_consent||[]).map(h=>h.vendor).join('; '),
+    r.verdict_detail || r.error || '', r.scanned_local || r.scanned_at || '',
   ].map(esc).join(','));
   const blob = new Blob([head.join(',') + '\n' + rows.join('\n')], {type:'text/csv'});
   const a = document.createElement('a');
@@ -266,6 +308,13 @@ function toCsv(){
 
 $('go').addEventListener('click', run);
 $('csv').addEventListener('click', toCsv);
+$('clear').addEventListener('click', () => {
+  if (!confirm('Clear all saved scan results?')) return;
+  results = [];
+  localStorage.removeItem(STORE_KEY);
+  render();
+});
+restoreResults();
 </script>
 </body>
 </html>
