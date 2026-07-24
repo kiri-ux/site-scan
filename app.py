@@ -11,8 +11,23 @@ from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, render_template, request
 
+import re
+
 import db
 from scanner import scan_site, normalize_url
+
+
+def _clean_conv_line(chunk):
+    """Keep only a URL token: the first whitespace-delimited piece minus
+    wrapping punctuation; reject non-URLs (annotations, notes)."""
+    parts = chunk.strip().split()
+    u = parts[0] if parts else ""
+    u = re.sub(r"^[(\"'\[<]+", "", u)
+    u = re.sub(r"[)\"'\]>,;.]+$", "", u)
+    host = re.sub(r"^https?://", "", u).split("/")[0]
+    if not u or "." not in host:
+        return ""
+    return u
 from signatures import PRODUCT_NAMES
 from state_checks import STATE_CODES
 
@@ -90,7 +105,8 @@ def upsert_site():
     conv = data.get("conversion_urls") or []
     if isinstance(conv, str):
         conv = conv.splitlines()
-    conversion_urls = "\n".join(c.strip() for c in conv if c.strip())[:8000]
+    conversion_urls = "\n".join(
+        c for c in (_clean_conv_line(str(x)) for x in conv) if c)[:8000]
     include_conversions = bool(data.get("include_conversions", True))
     client_name = str(data.get("client_name", ""))
     states = ",".join(s for s in (data.get("states") or [])

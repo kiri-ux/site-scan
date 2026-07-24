@@ -242,3 +242,9 @@ banner visibility, Consent Mode, or pre-consent fires.
   and the batch continues instead of freezing.
 - gunicorn now writes access + error logs, so scan requests are visible
   in Render Logs.
+
+## v0.10.2
+- URL cleaning now applies on every path pills can be populated:
+  typing/pasting, Edit from a run, Edit from a schedule row, and a
+  final sweep at scan time. The server cleans conversion lists on
+  schedule save, and the cron skips non-URL lines in legacy rows.

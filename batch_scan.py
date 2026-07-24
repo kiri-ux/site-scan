@@ -31,6 +31,17 @@ import db
 from scanner import scan_site
 
 
+def _valid_conv(u):
+    s = (u or "").strip()
+    if not s or " " in s:
+        return False
+    host = s
+    for pref in ("https://", "http://"):
+        if host.startswith(pref):
+            host = host[len(pref):]
+    return "." in host.split("/")[0]
+
+
 def _norm(u):
     s = (u or "").strip().lower()
     for pref in ("https://", "http://"):
@@ -58,6 +69,8 @@ def load_sites():
                 if s.get("include_conversions", True):
                     seen = {_norm(s["url"])}
                     for c in s.get("conversion_urls", []):
+                        if not _valid_conv(c):
+                            continue  # legacy rows may hold annotations
                         if _norm(c) in seen:
                             continue
                         seen.add(_norm(c))

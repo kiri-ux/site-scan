@@ -246,6 +246,17 @@ function cleanConvUrl(chunk){
   if (!host.includes('.') || /\s/.test(u)) return ''; // not a URL
   return u;
 }
+function sanitizeConvList(list){
+  const out = [], seen = new Set();
+  (list || []).forEach(x => {
+    const u = cleanConvUrl(String(x));
+    if (!u) return;
+    const k = normUrl(u);
+    if (!k || seen.has(k)) return;
+    seen.add(k); out.push(u);
+  });
+  return out;
+}
 function addConvUrls(text){
   text.split(/[\n,]/).forEach(chunk => {
     const u = cleanConvUrl(chunk);
@@ -373,7 +384,7 @@ function editSite(i){
   const s = schedSites[i];
   $('client-name').value = s.client_name || '';
   $('site-url').value = s.url;
-  convUrls = [...(s.conversion_urls || [])]; renderConvPills();
+  convUrls = sanitizeConvList(s.conversion_urls); renderConvPills();
   selectedProducts = [...(s.products || [])];
   selectedStates = [...(s.states || [])];
   $('sched-freq').value = s.frequency === 'off' ? 'daily' : s.frequency;
@@ -469,7 +480,7 @@ function editRun(key){
   const main = mainItem(g);
   $('client-name').value = g.name || '';
   $('site-url').value = main.r.url;
-  convUrls = g.items.filter(it => it !== main).map(it => it.r.url); renderConvPills();
+  convUrls = sanitizeConvList(g.items.filter(it => it !== main).map(it => it.r.url)); renderConvPills();
   // selected products = products reported on the main page (selection mode
   // reports all selected incl. 0-firing; detect-any reports fired only)
   selectedProducts = (main.r.products || []).map(p => p.product)
@@ -518,6 +529,7 @@ function dedupeUrls(main, convLines){
 async function run(){
   if ($('conv-input').value.trim()){ addConvUrls($('conv-input').value); $('conv-input').value = ''; }
   const main = $('site-url').value.trim();
+  convUrls = sanitizeConvList(convUrls); renderConvPills();
   const urls = dedupeUrls(main, convUrls);
   if (!urls.length) return;
   const full = $('fullmode').checked;
