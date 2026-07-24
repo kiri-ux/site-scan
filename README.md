@@ -326,3 +326,13 @@ banner visibility, Consent Mode, or pre-consent fires.
   and can never kill a worker.
 - All render paths (full, error, CMP with and without evidence) are
   executed in CI-style checks now, not just template-string-checked.
+
+## v0.11.0 - delete all, summary-level state checks, tooltip fix
+- Delete all button next to Download CSV: confirm, then wipes every
+  scan from server history (POST /scans/delete_all) and local view.
+- State checks moved to the client summary (the main-site strip at the
+  top of each run panel, and the top of share pages) - they're
+  client-level facts, so per-page rows no longer repeat them.
+- Chain hover tooltips fixed: a tip containing double quotes broke the
+  title attribute mid-string, killing hovers from that cell onward.
+  Tips are escaped now; hover any chain cell for its explanation.

@@ -144,6 +144,16 @@ def remove_site():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.post("/scans/delete_all")
+def delete_all():
+    try:
+        db.delete_all_scans()
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"delete_all failed: {e}")
+        return jsonify({"ok": False}), 500
+
+
 @app.get("/run/<run_id>")
 def share_run(run_id):
     return render_template("share.html", run_id=run_id)

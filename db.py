@@ -82,6 +82,13 @@ def recent_scans(limit=200):
         return out
 
 
+def delete_all_scans():
+    if not enabled():
+        return
+    with _conn() as cn, cn.cursor() as cur:
+        cur.execute("DELETE FROM scans")
+
+
 def scans_for_run(run_id):
     if not enabled():
         return []

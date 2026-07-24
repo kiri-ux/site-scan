@@ -26,10 +26,18 @@ const CHAIN_TIPS = {
 };
 
 function chainLink(k, v, state){
-  return `<div class="link ${state}" title="${CHAIN_TIPS[k] || ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  const tip = (CHAIN_TIPS[k] || '').replace(/"/g, '&quot;');
+  return `<div class="link ${state}" title="${tip}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+}
+function stateChecksHtml(r){
+  if (!(r.state_checks || []).length) return '';
+  return `<h3>State checks</h3><ul>` + r.state_checks.map(c =>
+    `<li><span class="badge ${c.status==='fail'?'bad':c.status==='pass'?'ok':'warn'}">${c.state} ${c.status}</span>
+      <div><b>${c.check}</b> <span class="evidence">${c.detail}</span></div></li>`).join('') + `</ul>`;
 }
 
-function chainFor(r){
+function chainFor(r, opts){
+  const withStates = !(opts && opts.states === false);
   const cmpNames = r.cmps.map(c => c.name).join(', ');
   const cmpState = r.cmps.length ? 'pass' : (r.ok ? 'fail' : 'mid');
   const bannerState = r.banner_visible === true ? 'pass'
@@ -70,7 +78,7 @@ function chainFor(r){
       ${chainLink('Pre-consent trackers', fireLabel, fireState)}
       ${chainLink('Product pixels', prodLabel, prodState)}
       ${chainLink('Reject honored', rejLabel, rejState)}
-      ${(r.states||[]).length ? chainLink('State checks', scLabel, scState) : ''}
+      ${withStates && (r.states||[]).length ? chainLink('State checks', scLabel, scState) : ''}
     </div>`;
 }
 
@@ -78,7 +86,7 @@ function renderSite(r, i){
   const meta = VERDICT_META[r.verdict] || VERDICT_META.error;
   const cmpNames = r.cmps.map(c => c.name).join(', ');
   const prods = r.products || [];
-  const chain = chainFor(r);
+  const chain = chainFor(r, {states: false});
 
   const gtmEvent = r.cmps.map(c => c.gtm_event).find(Boolean);
   const kvBits = [];
@@ -118,18 +126,12 @@ function renderSite(r, i){
         <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.reject_tested ? `<h3>Requests after Reject</h3><p class="kv">No trackers fired after Reject - the decline path is honored.</p>` : '');
 
-  const stateDetail = (r.state_checks || []).length ? `<h3>State checks</h3><ul>` + r.state_checks.map(c =>
-      `<li><span class="badge ${c.status==='fail'?'bad':c.status==='pass'?'ok':'warn'}">${c.state} ${c.status}</span>
-        <div><b>${c.check}</b> <span class="evidence">${c.detail}</span></div></li>`).join('') + `</ul>` : '';
-
   const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>
       `<li><span class="badge ok">post-consent</span><div><b>${h.vendor}</b><div class="u">${h.url}</div></div></li>`).join('') + `</ul>` : '';
 
   const missingProds = prods.filter(p => p.fired === 0);
   const rejV = (r.post_reject || []).some(h => h.severity === 'violation');
-  const scV = (r.state_checks || []).some(c => c.status === 'fail');
   const headBadges = [
-    scV ? '<span class="badge bad">state checks</span>' : '',
     rejV ? '<span class="badge bad">fires after reject</span>' : '',
     r.verdict === 'misconfigured' && !rejV ? '<span class="badge bad">pre-consent fires</span>' : '',
     missingProds.length ? '<span class="badge bad">pixels missing</span>' : '',
@@ -155,7 +157,7 @@ function renderSite(r, i){
       ${chain}
       <div class="verdict ${meta.cls}">${(r.verdict_lines && r.verdict_lines.length ? r.verdict_lines : [r.verdict_detail || r.error || '']).map(l => `<div class="vline">${l}</div>`).join('')}</div>
       ${kvBits.length ? `<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px">${kvBits.join('')}</div>` : ''}
-      <div class="detail">${cmpDetail}${fires}${rejFires}${stateDetail}${dspDetail}${gated}</div>
+      <div class="detail">${cmpDetail}${fires}${rejFires}${dspDetail}${gated}</div>
     </div>
   </div>`;
 }

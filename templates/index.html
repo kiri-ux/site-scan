@@ -186,6 +186,7 @@
     <div class="row">
       <button class="btn-primary" id="go">Scan sites</button>
       <button class="btn-ghost" id="csv" disabled>Download CSV</button>
+      <button class="btn-ghost" id="delete-all" disabled title="Permanently delete every scan in history">Delete all</button>
       <span style="flex:1"></span>
       <select id="sched-freq" class="freq-select" title="Frequency for recurring scans">
         <option value="daily">Daily</option>
@@ -454,7 +455,7 @@ function renderGroup(g){
       <span class="caret">&#9654;</span>
     </div>
     <div class="rg-body">
-      <div class="rg-summary" title="Summary for the main site (shortest URL in this run). Per-page details below.">${chainFor(mainItem(g).r)}</div>
+      <div class="rg-summary" title="Summary for the main site (shortest URL in this run). Per-page details below.">${chainFor(mainItem(g).r)}<div class="detail">${stateChecksHtml(mainItem(g).r)}</div></div>
       ${g.items.map(({r, i}) => renderSite(r, i)).join('')}
     </div>
   </div>`;
@@ -464,6 +465,7 @@ function render(){
   $('empty').style.display = results.length ? 'none' : 'block';
   $('results').innerHTML = groupRuns().map(renderGroup).join('');
   $('csv').disabled = !results.length;
+  $('delete-all').disabled = !results.length;
 }
 
 function shareRun(key, btn){
@@ -623,6 +625,15 @@ function toCsv(){
 $('go').addEventListener('click', run);
 $('csv').addEventListener('click', toCsv);
 $('sched-add').addEventListener('click', addSite);
+$('delete-all').addEventListener('click', async () => {
+  if (!confirm('Permanently delete ALL scans from history? This cannot be undone.')) return;
+  try {
+    if (dbEnabled) await fetch('/scans/delete_all', {method: 'POST'});
+  } catch(e){ console.error('delete all failed', e); }
+  results = [];
+  localStorage.removeItem(STORE_KEY);
+  render();
+});
 $('conv-input').addEventListener('keydown', e => {
   if (e.key === 'Enter'){ e.preventDefault(); addConvUrls(e.target.value); e.target.value = ''; }
   else if (e.key === 'Backspace' && !e.target.value && convUrls.length){ convUrls.pop(); renderConvPills(); }

@@ -113,7 +113,9 @@ const RUN_ID = {{ run_id | tojson }};
     $('t-name').textContent = g.name || main.r.url;
     $('t-when').textContent = `${items.length} page${items.length>1?'s':''} \u00b7 ${main.r.scanned_local || ''}`;
     $('title').style.display = 'flex';
-    $('pages').innerHTML = items.map(({r, i}) => renderSite(r, i)).join('');
+    $('pages').innerHTML =
+      `<div class="site open"><div class="site-body">${chainFor(main.r)}<div class="detail">${stateChecksHtml(main.r)}</div></div></div>`
+      + items.map(({r, i}) => renderSite(r, i)).join('');
     document.querySelector('.site')?.classList.add('open');
     $('loading').style.display = 'none';
     $('footnote').style.display = 'block';
