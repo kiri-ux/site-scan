@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consent Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --atlas:#002D58; --velocity:#0066B3; --gold:#F1B434; --parchment:#FDFBF7;
+    --ink:#16283B; --muted:#5B6B7C; --line:#D9DFE6; --card:#FFFFFF;
+    --ok:#1F7A4D; --ok-bg:#E7F4ED; --warn:#9A6A00; --warn-bg:#FBF1D9;
+    --bad:#B3261E; --bad-bg:#F9E7E5; --info-bg:#E8F1F8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Barlow',sans-serif;background:var(--parchment);color:var(--ink);min-height:100vh}
+  a{color:var(--velocity)}
+
+  header{background:var(--atlas);color:#fff;padding:20px 28px;display:flex;align-items:baseline;gap:14px;border-bottom:4px solid var(--gold)}
+  header h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;letter-spacing:.04em;text-transform:uppercase}
+  header .sub{font-size:13px;color:#B9C6D4}
+  header .build{margin-left:auto;font-size:11px;color:#7E93A8;letter-spacing:.06em}
+
+  main{max-width:1100px;margin:0 auto;padding:28px 20px 80px}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:22px}
+  .panel h2{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--atlas);margin-bottom:12px}
+
+  textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:14px/1.6 'Barlow',sans-serif;color:var(--ink);resize:vertical;background:#FCFCFB}
+  textarea:focus{outline:2px solid var(--velocity);outline-offset:1px}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:8px}
+
+  .row{display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap}
+  button{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;border:none;border-radius:8px;padding:11px 22px;cursor:pointer}
+  button:focus-visible{outline:2px solid var(--atlas);outline-offset:2px}
+  .btn-primary{background:var(--velocity);color:#fff}
+  .btn-primary:hover{background:#005696}
+  .btn-primary:disabled{background:#9DB6CB;cursor:default}
+  .btn-ghost{background:transparent;color:var(--velocity);border:1px solid var(--velocity)}
+  .btn-ghost:hover{background:var(--info-bg)}
+  .btn-ghost:disabled{color:#9DB6CB;border-color:#C9D6E0;cursor:default}
+  label.chk{font-size:13.5px;color:var(--muted);display:flex;align-items:center;gap:7px;cursor:pointer}
+
+  .progress{display:none;align-items:center;gap:12px;margin-top:16px;font-size:13.5px;color:var(--muted)}
+  .bar{flex:1;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+  .bar > div{height:100%;width:0;background:var(--gold);transition:width .3s}
+
+  /* results */
+  .site{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden}
+  .site-head{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer}
+  .site-head:hover{background:#FAFAF7}
+  .site-url{font-weight:600;font-size:15px;word-break:break-all}
+  .badge{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;border-radius:5px;padding:3px 9px;white-space:nowrap}
+  .badge.ok{background:var(--ok-bg);color:var(--ok)}
+  .badge.warn{background:var(--warn-bg);color:var(--warn)}
+  .badge.bad{background:var(--bad-bg);color:var(--bad)}
+  .badge.neutral{background:var(--info-bg);color:var(--velocity)}
+  .site-head .cmp-name{font-size:13px;color:var(--muted);white-space:nowrap}
+  .caret{margin-left:auto;color:var(--muted);transition:transform .2s;font-size:12px}
+  .site.open .caret{transform:rotate(90deg)}
+
+  .site-body{display:none;border-top:1px solid var(--line);padding:18px}
+  .site.open .site-body{display:block}
+
+  /* the consent chain */
+  .chain{display:flex;gap:0;margin:4px 0 18px;flex-wrap:wrap}
+  .link{flex:1;min-width:150px;position:relative;padding:12px 14px 12px 22px;background:#F5F6F4;border:1px solid var(--line);border-left:none}
+  .link:first-child{border-left:1px solid var(--line);border-radius:8px 0 0 8px;padding-left:14px}
+  .link:last-child{border-radius:0 8px 8px 0}
+  .link::after{content:"";position:absolute;right:-9px;top:50%;transform:translateY(-50%) rotate(45deg);width:16px;height:16px;background:inherit;border-top:1px solid var(--line);border-right:1px solid var(--line);z-index:1}
+  .link:last-child::after{display:none}
+  .link .k{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+  .link .v{font-size:14.5px;font-weight:600;margin-top:3px}
+  .link.pass{background:var(--ok-bg)} .link.pass .v{color:var(--ok)}
+  .link.fail{background:var(--bad-bg)} .link.fail .v{color:var(--bad)}
+  .link.mid{background:var(--warn-bg)} .link.mid .v{color:var(--warn)}
+
+  .verdict{font-size:14px;line-height:1.55;padding:12px 14px;border-radius:8px;margin-bottom:16px}
+  .verdict.ok{background:var(--ok-bg)} .verdict.bad{background:var(--bad-bg)}
+  .verdict.warn{background:var(--warn-bg)} .verdict.neutral{background:var(--info-bg)}
+  .verdict strong{font-weight:700}
+
+  .detail h3{font-family:'Barlow Condensed',sans-serif;font-size:13.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--atlas);margin:14px 0 6px}
+  .detail ul{list-style:none}
+  .detail li{font-size:13.5px;padding:7px 0;border-bottom:1px dashed var(--line);display:flex;gap:10px;align-items:baseline}
+  .detail li:last-child{border-bottom:none}
+  .detail .u{color:var(--muted);font-size:12px;word-break:break-all}
+  .evidence{font-size:12.5px;color:var(--muted)}
+  .pill{display:inline-block;background:var(--info-bg);color:var(--velocity);border-radius:4px;font-size:12px;font-weight:600;padding:2px 8px}
+  .kv{font-size:13.5px;color:var(--muted)}
+  .kv b{color:var(--ink)}
+
+  .empty{color:var(--muted);font-size:14px;text-align:center;padding:30px 0}
+  .results-tools{display:none;justify-content:flex-end;margin-bottom:14px}
+  @media (max-width:640px){ .link{min-width:46%} header{flex-wrap:wrap} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Consent Scanner</h1>
+  <span class="sub">CMP detection &middot; consent chain check &middot; pre-consent pixel capture</span>
+  <span class="build">BUILD {{ build }}</span>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Scan client sites</h2>
+    <textarea id="urls" placeholder="One site per line, e.g.&#10;sagedental.com&#10;https://www.trunorth.example"></textarea>
+    <div class="hint">Full scan loads each page in a headless browser and records which pixels fire before any consent interaction. Roughly 15&ndash;40 seconds per site.</div>
+    <div class="row">
+      <button class="btn-primary" id="go">Scan sites</button>
+      <button class="btn-ghost" id="csv" disabled>Download CSV</button>
+      <label class="chk"><input type="checkbox" id="fullmode" checked> Full scan (headless browser)</label>
+    </div>
+    <div class="progress" id="progress">
+      <span id="progress-label">Scanning&hellip;</span>
+      <div class="bar"><div id="bar-fill"></div></div>
+      <span id="progress-count"></span>
+    </div>
+  </section>
+
+  <div class="results-tools" id="results-tools"></div>
+  <section id="results"></section>
+  <p class="empty" id="empty">Results appear here. Each site gets a consent chain: CMP &rarr; banner &rarr; Consent Mode &rarr; pre-consent fires.</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let results = [];
+
+const VERDICT_META = {
+  ok:              {cls:'ok',      label:'Looks good'},
+  no_cmp:          {cls:'bad',     label:'No CMP'},
+  misconfigured:   {cls:'bad',     label:'Pre-consent fires'},
+  cmp_found_basic: {cls:'neutral', label:'CMP found (basic)'},
+  error:           {cls:'warn',    label:'Scan error'},
+};
+
+function chainLink(k, v, state){
+  return `<div class="link ${state}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+}
+
+function renderSite(r, i){
+  const meta = VERDICT_META[r.verdict] || VERDICT_META.error;
+  const cmpNames = r.cmps.map(c => c.name).join(', ');
+
+  // chain states
+  const cmpState = r.cmps.length ? 'pass' : (r.ok ? 'fail' : 'mid');
+  const bannerState = r.banner_visible === true ? 'pass'
+                    : r.banner_visible === false ? 'fail' : 'mid';
+  const cmState = r.consent_mode_default === true ? 'pass'
+                : r.consent_mode_default === false ? 'fail' : 'mid';
+  const viol = r.pre_consent.filter(h => h.severity === 'violation');
+  const warns = r.pre_consent.filter(h => h.severity === 'warn');
+  const fireState = viol.length ? 'fail' : (warns.length ? 'mid' : (r.mode==='full' ? 'pass' : 'mid'));
+  const fireLabel = r.mode !== 'full' ? 'Unknown'
+                  : viol.length ? `${viol.length} firing` : (warns.length ? 'Verify' : 'None');
+
+  const fmt = v => v === true ? 'Yes' : v === false ? 'No' : 'Unknown';
+
+  const chain = `<div class="chain">
+      ${chainLink('CMP', r.cmps.length ? cmpNames : (r.ok ? 'None found' : 'Unknown'), cmpState)}
+      ${chainLink('Banner visible', fmt(r.banner_visible), bannerState)}
+      ${chainLink('Consent Mode default', fmt(r.consent_mode_default), cmState)}
+      ${chainLink('Pre-consent trackers', fireLabel, fireState)}
+    </div>`;
+
+  const gtmEvent = r.cmps.map(c => c.gtm_event).find(Boolean);
+  const kvBits = [];
+  if (r.gtm && r.gtm.found) kvBits.push(`<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ') || 'present'}</b></span>`);
+  if (gtmEvent) kvBits.push(`<span class="kv">Trigger event: <span class="pill">${gtmEvent}</span></span>`);
+  const defaults = Object.entries(r.consent_defaults || {});
+  if (defaults.length) kvBits.push(`<span class="kv">Defaults: <b>${defaults.map(([k,v])=>`${k}=${v}`).join(', ')}</b></span>`);
+
+  const cmpDetail = r.cmps.length ? `<h3>CMP evidence</h3><ul>` + r.cmps.map(c =>
+      `<li><div><b>${c.name}</b> <span class="evidence">${c.evidence.join(' &middot; ')}</span>
+        ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}</div></li>`).join('') + `</ul>` : '';
+
+  const fires = r.pre_consent.length ? `<h3>Requests before consent</h3><ul>` + r.pre_consent.map(h =>
+      `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}">${h.severity}</span>
+        <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+    : (r.mode === 'full' && r.ok ? `<h3>Requests before consent</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
+
+  return `<div class="site" id="site-${i}">
+    <div class="site-head" onclick="this.parentElement.classList.toggle('open')">
+      <span class="badge ${meta.cls}">${meta.label}</span>
+      <span class="site-url">${r.url}</span>
+      ${cmpNames ? `<span class="cmp-name">${cmpNames}</span>` : ''}
+      <span class="badge neutral">${r.mode}</span>
+      <span class="caret">&#9654;</span>
+    </div>
+    <div class="site-body">
+      ${chain}
+      <div class="verdict ${meta.cls}">${r.verdict_detail || r.error || ''}</div>
+      ${kvBits.length ? `<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px">${kvBits.join('')}</div>` : ''}
+      <div class="detail">${cmpDetail}${fires}</div>
+    </div>
+  </div>`;
+}
+
+function render(){
+  $('empty').style.display = results.length ? 'none' : 'block';
+  $('results').innerHTML = results.map(renderSite).join('');
+  $('csv').disabled = !results.length;
+  // auto-open single result
+  if (results.length === 1) document.querySelector('.site')?.classList.add('open');
+}
+
+async function run(){
+  const urls = $('urls').value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!urls.length) return;
+  const full = $('fullmode').checked;
+  results = []; render();
+  $('go').disabled = true;
+  $('progress').style.display = 'flex';
+
+  for (let i = 0; i < urls.length; i++){
+    $('progress-label').textContent = `Scanning ${urls[i]}`;
+    $('progress-count').textContent = `${i + 1} / ${urls.length}`;
+    $('bar-fill').style.width = `${(i / urls.length) * 100}%`;
+    try {
+      const resp = await fetch('/scan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: urls[i], full}),
+      });
+      results.push(await resp.json());
+    } catch (e) {
+      results.push({url: urls[i], ok:false, mode:'basic', verdict:'error',
+        verdict_detail:'Request failed - the scan may have timed out. Try again or use basic mode.',
+        cmps:[], pre_consent:[], gtm:{found:false,container_ids:[]},
+        banner_visible:'unknown', consent_mode_default:'unknown', consent_defaults:{}});
+    }
+    render();
+  }
+  $('bar-fill').style.width = '100%';
+  $('progress-label').textContent = 'Done';
+  $('go').disabled = false;
+}
+
+function toCsv(){
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['url','verdict','mode','cmp','gtm_trigger_event','banner_visible',
+                'consent_mode_default','consent_defaults','gtm_container_ids',
+                'pre_consent_violations','pre_consent_warnings','detail','scanned_at'];
+  const rows = results.map(r => [
+    r.url, r.verdict, r.mode,
+    r.cmps.map(c => c.name).join('; '),
+    r.cmps.map(c => c.gtm_event).find(Boolean) || '',
+    r.banner_visible, r.consent_mode_default,
+    Object.entries(r.consent_defaults||{}).map(([k,v])=>`${k}=${v}`).join('; '),
+    (r.gtm?.container_ids || []).join('; '),
+    r.pre_consent.filter(h=>h.severity==='violation').map(h=>h.vendor).join('; '),
+    r.pre_consent.filter(h=>h.severity==='warn').map(h=>h.vendor).join('; '),
+    r.verdict_detail || r.error || '', r.scanned_at || '',
+  ].map(esc).join(','));
+  const blob = new Blob([head.join(',') + '\n' + rows.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `consent-scan-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$('go').addEventListener('click', run);
+$('csv').addEventListener('click', toCsv);
+</script>
+</body>
+</html>
