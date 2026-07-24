@@ -301,3 +301,14 @@ banner visibility, Consent Mode, or pre-consent fires.
   with no evidence; diagnosis was impossible.
 - Full-scan checkbox removed; every UI scan is a full scan. Basic mode
   remains as the server-side resilience fallback only.
+
+## v0.10.10 - the hardening that was supposed to be in 0.10.5
+- Discovered the v0.10.5 pool hardening (per-scan [scan] start/done
+  logging, stale-job skipping, guarded retry, browser recycling) never
+  actually persisted into scanner.py - a later patch clobbered it while
+  version notes claimed otherwise. Restored all of it, verified this
+  time by asserting the log output itself, not the patch result.
+- Also fixes a real bug the archaeology surfaced: the crash-retry path
+  dropped site_checks, so a retried main-site scan lost its state/GPC
+  passes.
+- Verdict prints show ok/error class; recycling logs itself.

@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.10.9"
+SCANNER_REV = "0.10.10"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -660,6 +660,7 @@ class _ScanJob:
         self.site_checks = site_checks
         self.done = _threading.Event()
         self.result, self.error = None, None
+        self.deadline = time.time() + 110  # caller stops waiting at 120s
 
 
 class _BrowserWorker(_threading.Thread):
@@ -676,9 +677,18 @@ class _BrowserWorker(_threading.Thread):
         self.browser = self.pw.chromium.launch(
             args=["--no-sandbox", "--disable-dev-shm-usage"])
 
+    RECYCLE_AFTER = max(3, int(_os.environ.get("RECYCLE_AFTER", "8")))
+
     def run(self):
+        scans = 0
         while True:
             job = self.jobs.get()
+            if time.time() > job.deadline:
+                job.error = TimeoutError("stale job - caller gave up")
+                job.done.set()
+                continue
+            t0 = time.time()
+            print(f"[scan] start {job.url}", flush=True)
             try:
                 if self.browser is None or not self.browser.is_connected():
                     self._launch()
@@ -686,21 +696,43 @@ class _BrowserWorker(_threading.Thread):
                                              job.products, job.states,
                                              job.site_checks)
             except Exception as first_err:
-                # browser may have died - relaunch once and retry
-                try:
+                # browser may have died - relaunch and retry once, but
+                # only if the caller is still waiting; grinding through
+                # abandoned work starves the queue behind it
+                if time.time() < job.deadline - 30:
+                    print(f"[scan] retry {job.url} after "
+                          f"{first_err.__class__.__name__}", flush=True)
+                    try:
+                        try:
+                            if self.browser:
+                                self.browser.close()
+                        except Exception:
+                            pass
+                        self.browser = None
+                        self._launch()
+                        job.result = _full_scan_impl(
+                            self.browser, job.url, job.products,
+                            job.states, job.site_checks)
+                    except Exception:
+                        job.error = first_err
+                else:
+                    job.error = first_err
+            finally:
+                status = (job.error.__class__.__name__ if job.error
+                          else "ok" if job.result else "?")
+                print(f"[scan] done  {job.url} [{status}] "
+                      f"{time.time()-t0:.1f}s", flush=True)
+                job.done.set()
+                scans += 1
+                if scans >= self.RECYCLE_AFTER:
+                    print("[scan] recycling browser", flush=True)
                     try:
                         if self.browser:
                             self.browser.close()
                     except Exception:
                         pass
                     self.browser = None
-                    self._launch()
-                    job.result = _full_scan_impl(self.browser, job.url,
-                                                 job.products, job.states)
-                except Exception:
-                    job.error = first_err
-            finally:
-                job.done.set()
+                    scans = 0
 
 
 class _BrowserPool:
