@@ -364,3 +364,11 @@ banner visibility, Consent Mode, or pre-consent fires.
   matrix vs Code-Cube / Lokker / ObservePoint / ConsentPixel / CMPs,
   the price ladder, proposed pricing cards, rationale, and open
   decisions - the internal one-pager, always one click away.
+
+## v0.11.4 - partner name, flat pixel sections
+- Partner name field beside Client name: saved with runs and recurring
+  sites, shown on the run header ("via Larsen Media Group"), restored
+  by Edit, exported in CSV, carried through cron scans.
+- Product pixels render as flat cards (header row + always-visible
+  pixel rows) and Other pixels is its own headed section - no more
+  expand/collapse hiding the detail.

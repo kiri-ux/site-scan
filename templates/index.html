@@ -107,6 +107,12 @@
   .site-head .cmp-name{font-size:13px;color:var(--muted);white-space:nowrap}
   .caret{color:var(--muted);transition:transform .2s;font-size:12px}
   .scanned{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:760px){.two-col{grid-template-columns:1fr}}
+  .rg-partner{font-size:13px;color:var(--muted);font-style:italic}
+  .prodflat{margin:0 0 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .prodhead{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px dashed var(--line);font-size:14px}
+  .prodflat ul{padding:4px 12px 8px}
   .field-label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--atlas);margin:14px 0 6px}
   .field-label:first-of-type{margin-top:0}
   .field-label .opt{font-family:'Barlow',sans-serif;text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);font-size:12.5px}
@@ -214,8 +220,16 @@
   <div id="view-scan">
   <section class="panel">
     <h2>Scan a client</h2>
-    <label class="field-label" for="client-name">Client name</label>
-    <input id="client-name" type="text" class="text-input" placeholder="Town &amp; Country Ford">
+    <div class="two-col">
+      <div>
+        <label class="field-label" for="client-name">Client name</label>
+        <input id="client-name" type="text" class="text-input" placeholder="Town &amp; Country Ford">
+      </div>
+      <div>
+        <label class="field-label" for="partner-name">Partner name <span class="opt">(the agency this client belongs to)</span></label>
+        <input id="partner-name" type="text" class="text-input" placeholder="Larsen Media Group">
+      </div>
+    </div>
     <label class="field-label" for="site-url">Client website</label>
     <input id="site-url" type="text" class="text-input" placeholder="clientsite.com">
     <label class="field-label" for="conv-input">Conversion URLs to check <span class="opt">(optional - landing pages, thank-you pages. Type or paste, Enter to add)</span></label>
@@ -477,6 +491,7 @@ async function patchSite(i, patch){
       conversion_urls: s.conversion_urls || [],
       include_conversions: patch.include_conversions ?? s.include_conversions,
       client_name: s.client_name || '',
+      partner_name: s.partner_name || '',
       states: s.states || [],
     })});
   loadSchedule();
@@ -491,6 +506,7 @@ async function removeSite(i){
 function editSite(i){
   const s = schedSites[i];
   $('client-name').value = s.client_name || '';
+  $('partner-name').value = s.partner_name || '';
   $('site-url').value = s.url;
   convUrls = sanitizeConvList(s.conversion_urls); renderConvPills();
   selectedProducts = [...(s.products || [])];
@@ -509,7 +525,8 @@ async function addSite(){
   const resp = await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({url, frequency: $('sched-freq').value,
       products: selectedProducts, states: selectedStates, conversion_urls: conv,
-      include_conversions: true, client_name: $('client-name').value.trim()})});
+      include_conversions: true, client_name: $('client-name').value.trim(),
+      partner_name: $('partner-name').value.trim()})});
   if (resp.ok){
     const btn = $('sched-add');
     const label = btn.textContent;
@@ -555,6 +572,7 @@ function renderGroup(g){
     <div class="rg-head" onclick="this.parentElement.classList.toggle('open')">
       ${groupBadge(g.items)}
       <span class="rg-name">${title}</span>
+      ${(() => { const pn = g.items.map(x => x.r.partner_name).find(Boolean); return pn ? `<span class="rg-partner">via ${pn}</span>` : ''; })()}
       <span class="rg-sub">${g.items.length} page${g.items.length>1?'s':''}</span>
       ${(mainItem(g).r.products || []).map(p => {
         const cls = p.fired === 0 ? 'bad' : p.fired < p.expected ? 'warn' : 'ok';
@@ -593,6 +611,7 @@ function editRun(key){
   if (!g) return;
   const main = mainItem(g);
   $('client-name').value = g.name || '';
+  $('partner-name').value = g.items.map(x => x.r.partner_name).find(Boolean) || '';
   $('site-url').value = main.r.url;
   convUrls = sanitizeConvList(g.items.filter(it => it !== main).map(it => it.r.url)); renderConvPills();
   // selected products = products reported on the main page (selection mode
@@ -649,6 +668,7 @@ async function run(){
   const full = true; // always full - basic remains a server-side fallback
   const runId = newRunId();
   const clientName = $('client-name').value.trim();
+  const partnerName = $('partner-name').value.trim();
   freshRunId = runId;
   results = []; render();
   $('go').disabled = true;
@@ -677,7 +697,7 @@ async function run(){
         const resp = await fetch('/scan', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === 0, run_id: runId, client_name: clientName}),
+          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === 0, run_id: runId, client_name: clientName, partner_name: partnerName}),
           signal: ctrl.signal,
         });
         clearTimeout(timer);
@@ -711,7 +731,7 @@ function toCsv(){
                 'product_pixels','products_missing','state_targets','state_check_failures',
                 'trackers_fired_after_accept','detail','scanned_at'];
   const rows = results.map(r => [
-    r.client_name || '', r.url, r.verdict, r.mode,
+    r.client_name || '', r.partner_name || '', r.url, r.verdict, r.mode,
     r.cmps.map(c => c.name).join('; '),
     r.cmps.map(c => c.gtm_event).find(Boolean) || '',
     r.banner_visible, r.consent_mode_default,

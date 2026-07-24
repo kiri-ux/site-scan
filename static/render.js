@@ -100,10 +100,10 @@ function renderSite(r, i){
         ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}</div></li>`).join('') + `</ul>` : '';
 
   const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
-  const fires = r.pre_consent.length ? `<details class="prod"${preViol ? ' open' : ''}><summary><b>Other pixels</b> <span class="pill">${r.pre_consent.length}</span>${preViol ? ` <span class="badge bad">${preViol} pre-consent</span>` : ''}<span class="caret">&#9654;</span></summary><ul>` + r.pre_consent.map(h =>
+  const fires = r.pre_consent.length ? `<h3>Other pixels${preViol ? ` <span class="badge bad">${preViol} pre-consent</span>` : ''}</h3><ul>` + r.pre_consent.map(h =>
       `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}">${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
-        <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul></details>`
-    : (r.mode === 'full' && r.ok ? `<details class="prod"><summary><b>Other pixels</b> <span class="pill">0</span><span class="caret">&#9654;</span></summary><p class="kv" style="padding:8px 12px">No known ad/analytics endpoints were contacted before consent on this page.</p></details>` : '');
+        <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+    : (r.mode === 'full' && r.ok ? `<h3>Other pixels</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
   const pxBadge = px => !px.fired_pre && !px.fired_post
         ? '<span class="badge bad">not firing</span>'
@@ -115,10 +115,10 @@ function renderSite(r, i){
                        : p.fired < p.expected ? '<span class="badge warn">partial</span>'
                        : '<span class="badge ok">firing</span>';
       const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected} firing</span>` : '';
-      return `<details class="prod"><summary><b>${p.product}</b>${countPill} ${stateBadge}<span class="caret">&#9654;</span></summary>
+      return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
         `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ' <span class="evidence">working, but should be consent-gated</span>' : ''}${px.macro_warning ? ' <span class="macro-warn">pixel URL contains unreplaced macros like [ORDER] - the template was pasted without filling values, so conversion data will be blank</span>' : ''}
-         ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></details>`;
+         ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></div>`;
     }).join('')
     : `<p class="kv">${r.accept_clicked ? 'No product pixels observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';
 
