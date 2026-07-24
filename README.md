@@ -520,3 +520,7 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Open decisions: added the partner-seeding idea - free first to the
   highest-spend partners (Wheeler, LMSD) and partners with recent
   tracking/consent issues, turning them into the case-study base.
+
+## v0.13.4
+- YouTube checks Google Ads only. Google Analytics belongs to the SEO
+  product; without SEO selected, GA surfaces in Other pixels.
