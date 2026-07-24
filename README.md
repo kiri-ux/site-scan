@@ -426,3 +426,8 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Run-header Share / Edit / Delete are compact icon buttons (tooltips
   and aria-labels preserved; Share flashes a checkmark when the link
   copies).
+
+## v0.12.7
+- Open decisions gains a launch-promo idea: free for the rest of 2026
+  as the pilot, converting to paid Jan 1 - with the note that ToS and
+  disclaimers still apply from day one.
