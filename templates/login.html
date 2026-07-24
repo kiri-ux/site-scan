@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consent Scanner - Sign in</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{--atlas:#002D58;--velocity:#0066B3;--gold:#F1B434;--parchment:#FDFBF7;--ink:#16283B;--muted:#5B6B7C;--line:#D9DFE6;--bad:#B3261E;--bad-bg:#F9E7E5}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Barlow',sans-serif;background:var(--parchment);min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .card{background:#fff;border:1px solid var(--line);border-top:4px solid var(--gold);border-radius:10px;padding:34px 36px;width:min(92vw,380px)}
+  h1{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:24px;letter-spacing:.05em;text-transform:uppercase;color:var(--atlas);margin-bottom:4px}
+  .sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+  label{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:12.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--atlas);margin-bottom:6px}
+  input{width:100%;border:1px solid var(--line);border-radius:8px;padding:11px 12px;font:15px 'Barlow',sans-serif;color:var(--ink)}
+  input:focus{outline:2px solid var(--velocity)}
+  button{width:100%;margin-top:14px;background:var(--velocity);color:#fff;border:none;border-radius:8px;padding:12px;font:600 15px 'Barlow',sans-serif;cursor:pointer}
+  button:hover{background:var(--atlas)}
+  .err{background:var(--bad-bg);color:var(--bad);border-radius:8px;padding:10px 12px;font-size:13.5px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<form class="card" method="POST" action="/login">
+  <h1>Consent Scanner</h1>
+  <div class="sub">Internal tool - sign in to continue</div>
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  <label for="pw">Password</label>
+  <input type="password" id="pw" name="password" autofocus autocomplete="current-password">
+  <button type="submit">Sign in</button>
+</form>
+</body>
+</html>

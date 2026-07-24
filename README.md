@@ -378,3 +378,11 @@ banner visibility, Consent Mode, or pre-consent fires.
   CMP sites get the GTM procedure applied and verified; no-CMP sites
   get a documented findings package for the banner conversation. The
   fee is justified by the onboarding audit every client receives.
+
+## v0.12.0 - password gate
+- Set SCANNER_PASSWORD in the environment to require sign-in. Sessions
+  last 30 days. Share pages (/run/...), their API, static assets, and
+  /health stay open - share links are for clients and don't include
+  the Build-vs-market tab. /logout ends the session. Optionally set
+  SECRET_KEY to keep sessions valid across password changes.
+- No password set = no gate (unchanged behavior).

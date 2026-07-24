@@ -9,9 +9,12 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, session
 
+import hashlib
+import hmac
 import re
+from datetime import timedelta
 
 import db
 from scanner import scan_site, normalize_url
@@ -36,6 +39,56 @@ from signatures import PRODUCT_NAMES
 from state_checks import STATE_CODES
 
 app = Flask(__name__)
+
+# ---- password gate (set SCANNER_PASSWORD in the environment to enable).
+# Share pages, their API, static assets, and health stay open: share
+# links are for clients, and the sensitive Build-vs-market tab lives
+# only on the main app.
+SCANNER_PASSWORD = os.environ.get("SCANNER_PASSWORD", "")
+app.secret_key = (os.environ.get("SECRET_KEY")
+                  or hashlib.sha256(
+                      ("consent-scanner:" + SCANNER_PASSWORD).encode()
+                  ).hexdigest())
+app.permanent_session_lifetime = timedelta(days=30)
+
+_OPEN_PREFIXES = ("/run/", "/api/run/", "/static/")
+_OPEN_PATHS = {"/health", "/favicon.ico", "/login"}
+
+
+@app.before_request
+def _gate():
+    if not SCANNER_PASSWORD:
+        return None
+    p = request.path
+    if p in _OPEN_PATHS or any(p.startswith(x) for x in _OPEN_PREFIXES):
+        return None
+    if session.get("authed"):
+        return None
+    return app.redirect("/login", code=302)
+
+
+@app.get("/login")
+def login_form():
+    if not SCANNER_PASSWORD or session.get("authed"):
+        return app.redirect("/", code=302)
+    return render_template("login.html", error=None)
+
+
+@app.post("/login")
+def login_submit():
+    supplied = str(request.form.get("password", ""))
+    if SCANNER_PASSWORD and hmac.compare_digest(supplied, SCANNER_PASSWORD):
+        session.permanent = True
+        session["authed"] = True
+        return app.redirect("/", code=302)
+    return render_template("login.html",
+                           error="That password isn't right - try again."), 401
+
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return app.redirect("/login", code=302)
 
 BUILD = open(os.path.join(os.path.dirname(__file__), "VERSION")).read().strip() \
     if os.path.exists(os.path.join(os.path.dirname(__file__), "VERSION")) else "dev"
