@@ -67,6 +67,11 @@
   .mkt ul,.mkt ol{padding-left:20px}
   .mkt li{margin-bottom:7px;font-size:13.5px}
   .mkt li b{color:var(--atlas)}
+  .mkt .legal-exp{border-bottom:2px solid var(--gold);padding-bottom:10px}
+  .mkt .legal-exp summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:10px}
+  .mkt .legal-exp summary::-webkit-details-marker{display:none}
+  .mkt .legal-exp .caret{color:var(--muted);font-size:12px;transition:transform .2s}
+  .mkt .legal-exp[open] .caret{transform:rotate(90deg)}
   .mkt .footn{margin-top:26px;border-top:1px solid var(--line);padding-top:12px;font-size:11.5px;color:var(--muted);line-height:1.6}
   @media (max-width:900px){.mkt .cards3,.mkt .cols2{grid-template-columns:1fr}}
   main{max-width:1100px;margin:0 auto;padding:20px 20px 80px}
@@ -323,19 +328,10 @@
     <li><b>Next build</b> &mdash; GTM API config audit (Cloud project + Tag Manager API + OAuth).</li>
   </ol></div>
 </div>
-<h2>Legal safeguards</h2>
-<ul>
-  <li><b>Check-based language everywhere</b> &mdash; reports say "fails the GPC check &mdash; required for CA targeting," never "violates California law." Compliance is a legal conclusion; checks are facts we can stand behind.</li>
-  <li><b>Never "compliant," "certified," or "passed"</b> &mdash; the ceiling is "no issues detected in checked items." Absence of flags is not a determination of compliance, and every report footer says so.</li>
-  <li><b>Scope disclosed on every report</b> &mdash; point-in-time, scanned pages only, load-time behavior only. Client-facing share pages already carry this footnote.</li>
-  <li><b>Counsel-reviewed ToS before client-facing</b> &mdash; informational service, no guarantee of compliance, liability capped at fees paid, consequential damages excluded, client acknowledges responsibility for their own legal compliance.</li>
-  <li><b>E&amp;O confirmation</b> &mdash; one call to the broker to confirm tech E&amp;O covers a software product with automated outputs, not just services.</li>
-  <li><b>Alert-handling SOP in writing</b> &mdash; once we monitor, we've assumed a duty; a flagged issue that sits unactioned is worse than no scan. Who tells the client, how fast, documented.</li>
-  <li><b>State-law check map on a review cadence</b> &mdash; counsel sign-off, quarterly re-verification, staleness notice in the tool past 120 days.</li>
-  <li><b>Sequence: internal first</b> &mdash; buyer tool today; client-facing only after the ToS, E&amp;O, and SOP above are in place.</li>
-</ul>
-<h2>Legal posture &mdash; how we protect ourselves</h2>
-<ul>
+
+<details class="legal-exp">
+<summary><h2 style="border-bottom:none;margin:26px 0 0;display:inline">Legal posture &mdash; how we protect ourselves</h2> <span class="caret">&#9654;</span></summary>
+<ul style="margin-top:12px">
   <li><b>Check-based language, never legal conclusions</b> &mdash; reports say "fails the GPC check &mdash; required for CA targeting," never "violates California law." Compliance depends on facts we can't see; asserting it creates the liability.</li>
   <li><b>No "compliant," "certified," or "passed"</b> anywhere in product copy or reports &mdash; "no issues detected in checked items" is the ceiling.</li>
   <li><b>Scope disclaimer travels with every report</b> &mdash; point-in-time, scanned pages only, load-time behavior only. Already baked into share-page footers.</li>
@@ -344,6 +340,7 @@
   <li><b>Alert-handling SOP</b> &mdash; selling monitoring creates a duty to act on findings; document who tells the client, how fast, and where it's logged. "Flagged in March, mentioned in June" is worse than never scanning.</li>
   <li><b>Quarterly state-map review</b> &mdash; the check map is static, cited, and counsel-reviewable; the scanner nags when the review date lapses.</li>
 </ul>
+</details>
 <div class="footn">Internal draft &mdash; not legal or financial advice. Competitor pricing from public sources, July 2026. Capability ratings reflect Vici's use case, not a general product review. Scanner reports use check-based language and never assert legal compliance.</div>
 </div>
 

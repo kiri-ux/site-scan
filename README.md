@@ -412,3 +412,7 @@ banner visibility, Consent Mode, or pre-consent fires.
   discussion. Also on the one-pager.
 - Run headers fall back to the saved client record for the partner
   name, so runs scanned before the partner field existed show it too.
+
+## v0.12.4
+- Legal posture section collapses by default on the Build-vs-market
+  tab (and the one-pager, where it auto-expands for printing).
