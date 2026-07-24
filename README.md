@@ -457,3 +457,10 @@ banner visibility, Consent Mode, or pre-consent fires.
   reported as "None found" just because the vendor is new to us.
 - Run-header timestamp is a clock icon; the full "most recent pull"
   timestamp shows on hover. Header icons sit tighter.
+
+## v0.12.12
+- Banner visibility falls back to the generic banner probe when a
+  known CMPs selectors miss its actual DOM (the Hansel/ComplyAuto
+  case: vendor identified, banner clearly on screen, selectors blind).
+- Starting a new scan no longer hides previous runs - history stays
+  on screen and the new run inserts at the top.

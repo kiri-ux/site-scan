@@ -720,7 +720,7 @@ async function run(){
   const clientName = $('client-name').value.trim();
   const partnerName = $('partner-name').value.trim();
   freshRunId = runId;
-  results = []; render();
+  // keep existing runs visible - the new run's results insert at the top
   $('go').disabled = true;
   $('progress').style.display = 'flex';
 

@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.12.11"
+SCANNER_REV = "0.12.12"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -228,6 +228,34 @@ def basic_scan(url, result=None):
 
 # ---------------------------------------------------------------- tier 2
 
+def _generic_banner_probe(page):
+    """Anchored element with consent text + accept/reject button, and
+    IAB API presence. Used when no CMP signature matches, and as a
+    visibility fallback when a known CMP's selectors miss its DOM."""
+    try:
+        return page.evaluate("""() => {
+          const out = {banner: false, tcf: !!window.__tcfapi,
+                       usp: !!window.__uspapi, gpp: !!window.__gpp};
+          const btnRe = /^\\s*(accept|agree|allow|got it|ok(ay)?|reject|decline|deny|refuse|do not sell|manage (choices|preferences|cookies))/i;
+          const txtRe = /(cookie|consent|privacy choices|personal information|tracking technologies)/i;
+          for (const el of document.querySelectorAll('div,section,aside,dialog,footer')) {
+            let st; try { st = getComputedStyle(el); } catch(e){ continue; }
+            const anchored = st.position === 'fixed' || st.position === 'sticky' ||
+                             el.getAttribute('role') === 'dialog' || el.tagName === 'DIALOG';
+            if (!anchored) continue;
+            const txt = (el.innerText || '').slice(0, 4000);
+            if (!txtRe.test(txt)) continue;
+            const btns = el.querySelectorAll('button, a[role=button], input[type=button], input[type=submit]');
+            for (const b of btns) {
+              if (btnRe.test((b.innerText || b.value || '').trim())) { out.banner = true; return out; }
+            }
+          }
+          return out;
+        }""")
+    except Exception:
+        return None
+
+
 def _full_scan_impl(browser, url, products=None, states=None,
                     site_checks=True):
     result = _empty_result(url)
@@ -326,6 +354,10 @@ def _full_scan_impl(browser, url, products=None, states=None,
                             visible = True
                     except Exception:
                         pass
+            if not visible:
+                probe = _generic_banner_probe(page)
+                if probe and probe.get("banner"):
+                    visible = True  # selectors drifted; banner is there
             result["banner_visible"] = visible
         else:
             # --- generic fallback: flag consent banners we don't have a
@@ -335,28 +367,7 @@ def _full_scan_impl(browser, url, products=None, states=None,
             # accept- or reject-style button. IAB APIs count as evidence
             # too. Named "Unrecognized consent banner" so buyers know a
             # mechanism exists but the vendor needs identifying.
-            try:
-                generic = page.evaluate("""() => {
-                  const out = {banner: false, tcf: !!window.__tcfapi,
-                               usp: !!window.__uspapi, gpp: !!window.__gpp};
-                  const btnRe = /^\\s*(accept|agree|allow|got it|ok(ay)?|reject|decline|deny|refuse|do not sell|manage (choices|preferences|cookies))/i;
-                  const txtRe = /(cookie|consent|privacy choices|personal information|tracking technologies)/i;
-                  for (const el of document.querySelectorAll('div,section,aside,dialog,footer')) {
-                    let st; try { st = getComputedStyle(el); } catch(e){ continue; }
-                    const anchored = st.position === 'fixed' || st.position === 'sticky' ||
-                                     el.getAttribute('role') === 'dialog' || el.tagName === 'DIALOG';
-                    if (!anchored) continue;
-                    const txt = (el.innerText || '').slice(0, 4000);
-                    if (!txtRe.test(txt)) continue;
-                    const btns = el.querySelectorAll('button, a[role=button], input[type=button], input[type=submit]');
-                    for (const b of btns) {
-                      if (btnRe.test((b.innerText || b.value || '').trim())) { out.banner = true; return out; }
-                    }
-                  }
-                  return out;
-                }""")
-            except Exception:
-                generic = None
+            generic = _generic_banner_probe(page)
             if generic:
                 ev = []
                 if generic.get("banner"):
