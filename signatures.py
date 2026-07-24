@@ -139,6 +139,15 @@ CMP_SIGNATURES = [
         "gtm_event": None,
         "notes": "Axeptio pushes per-vendor booleans to the dataLayer; check site config.",
     },
+    {
+        "name": "ComplyAuto",
+        "domains": ["complyauto.com", "cdn.complyauto"],
+        "js_globals": ["ComplyAuto", "complyAuto"],
+        "cookies": ["ca_consent", "complyauto"],
+        "banner_selectors": ["[id*='complyauto']", "[class*='complyauto']"],
+        "gtm_event": None,
+        "notes": "Automotive-dealership CMP (CPRA-focused: privacy-choices link, GPC honoring, 'Deny targeting cookies' button). GTM trigger event not yet mapped - verify the trigger in the container.",
+    },
 ]
 
 # Accept-button selectors per CMP, used to simulate a user clicking
@@ -185,6 +194,7 @@ REJECT_SELECTORS = {
 
 STRICT_REJECT_TEXT = (r"^\s*(reject( all)?( cookies)?|decline( all)?|"
                       r"disagree|refuse( all)?|deny( all)?|"
+                      r"deny targeting cookies|"
                       r"only (necessary|essential)( cookies)?|"
                       r"necessary (cookies )?only)\s*$")
 

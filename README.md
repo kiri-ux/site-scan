@@ -436,3 +436,9 @@ banner visibility, Consent Mode, or pre-consent fires.
 - YouTube product added: checks Google Ads conversion/remarketing
   (googleadservices, googleads.g.doubleclick.net) and GA4 pixels,
   matching how YouTube campaigns actually track.
+
+## v0.12.9
+- ComplyAuto added as the 15th CMP signature (automotive-dealership
+  CMP, seen on gohansel.com): domain, JS globals, banner selectors,
+  and their "Deny targeting cookies" button in the reject fallback.
+  GTM trigger event not yet mapped - noted in the CMP notes.
