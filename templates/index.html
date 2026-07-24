@@ -180,6 +180,8 @@
     </div>
     <label class="field-label">Products <span class="opt">(select what this client runs - unselected products are still detected if seen)</span></label>
     <div class="chips" id="product-chips"></div>
+    <label class="field-label">State targets <span class="opt">(where this client's campaigns run - adds GPC and opt-out checks for those states)</span></label>
+    <div class="chips" id="state-chips"></div>
     <div class="hint">Full scan loads each page in a headless browser, records pre-consent fires, clicks Accept, then verifies the selected products' pixels. Roughly 15&ndash;40 seconds per page.</div>
     <div class="row">
       <button class="btn-primary" id="go">Scan sites</button>
@@ -253,6 +255,17 @@ function toggleProduct(p){
     ? selectedProducts.filter(x => x !== p) : [...selectedProducts, p];
   renderChips();
 }
+const STATES = ['CA','CO','CT','TX','MT','OR','DE','NH','NJ','NE','MD','MN','VA','UT','IA','IN','KY','TN','RI','FL'];
+let selectedStates = [];
+function renderStateChips(){
+  $('state-chips').innerHTML = STATES.map(s =>
+    `<button type="button" class="chip ${selectedStates.includes(s)?'on':''}" onclick="toggleState('${s}')">${s}</button>`).join('');
+}
+function toggleState(s){
+  selectedStates = selectedStates.includes(s)
+    ? selectedStates.filter(x => x !== s) : [...selectedStates, s];
+  renderStateChips();
+}
 
 function saveResults(){
   if (dbEnabled) return; // server history is the source of truth
@@ -306,7 +319,7 @@ async function loadSchedule(){
     }
     list.innerHTML = schedSites.map((s, i) => `
       <div class="sched-row">
-        <span class="surl">${s.client_name ? `<b>${s.client_name}</b> &middot; ` : ''}${s.url}${(s.products||[]).length ? ` <span class="prod-tags">${s.products.join(' &middot; ')}</span>` : ''}</span>
+        <span class="surl">${s.client_name ? `<b>${s.client_name}</b> &middot; ` : ''}${s.url}${(s.products||[]).length ? ` <span class="prod-tags">${s.products.join(' &middot; ')}</span>` : ''}${(s.states||[]).length ? ` <span class="prod-tags">[${s.states.join(', ')}]</span>` : ''}</span>
         <label class="conv-toggle" title="Also scan this site's saved conversion URLs on each recurring run">
           <input type="checkbox" ${s.include_conversions ? 'checked' : ''}
                  ${(s.conversion_urls||[]).length ? '' : 'disabled'}
@@ -333,6 +346,7 @@ async function patchSite(i, patch){
       conversion_urls: s.conversion_urls || [],
       include_conversions: patch.include_conversions ?? s.include_conversions,
       client_name: s.client_name || '',
+      states: s.states || [],
     })});
   loadSchedule();
 }
@@ -349,8 +363,10 @@ function editSite(i){
   $('site-url').value = s.url;
   convUrls = [...(s.conversion_urls || [])]; renderConvPills();
   selectedProducts = [...(s.products || [])];
+  selectedStates = [...(s.states || [])];
   $('sched-freq').value = s.frequency === 'off' ? 'daily' : s.frequency;
   renderChips();
+  renderStateChips();
   showTab('scan');
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
@@ -361,7 +377,7 @@ async function addSite(){
   const conv = dedupeUrls(url, convUrls).slice(1);
   const resp = await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({url, frequency: $('sched-freq').value,
-      products: selectedProducts, conversion_urls: conv,
+      products: selectedProducts, states: selectedStates, conversion_urls: conv,
       include_conversions: true, client_name: $('client-name').value.trim()})});
   if (resp.ok){
     const btn = $('sched-add');
@@ -446,7 +462,9 @@ function editRun(key){
   // reports all selected incl. 0-firing; detect-any reports fired only)
   selectedProducts = (main.r.products || []).map(p => p.product)
     .filter(p => PRODUCTS.includes(p));
+  selectedStates = [...(main.r.states || [])];
   renderChips();
+  renderStateChips();
   showTab('scan');
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
@@ -519,7 +537,7 @@ async function run(){
         const resp = await fetch('/scan', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({url: urls[i], full, products: selectedProducts, run_id: runId, client_name: clientName}),
+          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, run_id: runId, client_name: clientName}),
         });
         const r = await resp.json();
         r.scanned_local = stamp();
@@ -544,7 +562,7 @@ function toCsv(){
   const head = ['client_name','url','verdict','mode','cmp','gtm_trigger_event','banner_visible',
                 'consent_mode_default','consent_defaults','gtm_container_ids',
                 'pre_consent_violations','pre_consent_warnings','accept_clicked',
-                'product_pixels','products_missing',
+                'product_pixels','products_missing','state_targets','state_check_failures',
                 'trackers_fired_after_accept','detail','scanned_at'];
   const rows = results.map(r => [
     r.client_name || '', r.url, r.verdict, r.mode,
@@ -558,6 +576,8 @@ function toCsv(){
     r.accept_clicked,
     (r.products||[]).map(p=>`${p.product} ${p.fired}/${p.expected}`).join('; '),
     (r.products||[]).filter(p=>p.fired===0).map(p=>p.product).join('; '),
+    (r.states||[]).join('; '),
+    (r.state_checks||[]).filter(c=>c.status==='fail').map(c=>`${c.state} ${c.check}`).join('; '),
     (r.post_consent||[]).map(h=>h.vendor).join('; '),
     r.verdict_detail || r.error || '', r.scanned_local || r.scanned_at || '',
   ].map(esc).join(','));
@@ -584,6 +604,7 @@ $('conv-input').addEventListener('blur', e => {
   if (e.target.value.trim()){ addConvUrls(e.target.value); e.target.value = ''; }
 });
 renderChips();
+renderStateChips();
 restoreResults();
 loadSchedule();
 </script>

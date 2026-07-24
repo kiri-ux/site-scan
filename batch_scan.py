@@ -53,14 +53,15 @@ def load_sites():
                     continue
                 prods = s.get("products") or None
                 name = s.get("client_name", "")
-                due.append((s["url"], prods, name))
+                sts = s.get("states") or None
+                due.append((s["url"], prods, name, sts))
                 if s.get("include_conversions", True):
                     seen = {_norm(s["url"])}
                     for c in s.get("conversion_urls", []):
                         if _norm(c) in seen:
                             continue
                         seen.add(_norm(c))
-                        due.append((c, prods, name))
+                        due.append((c, prods, name, sts))
             if due:
                 return due
             print("Schedule table has no sites due today.")
@@ -74,13 +75,14 @@ def load_sites():
     for chunk in raw.replace(",", "\n").splitlines():
         s = chunk.strip()
         if s and not s.startswith("#"):
-            sites.append((s, None, ""))
+            sites.append((s, None, "", None))
     return sites
 
 
 def to_rows(results):
     head = ["url", "verdict", "cmp", "banner_visible", "consent_mode_default",
             "pre_consent_violations", "post_reject_violations",
+            "state_check_failures",
             "product_pixels", "products_missing",
             "accept_clicked", "reject_tested", "detail", "scanned_at"]
     rows = [head]
@@ -93,6 +95,9 @@ def to_rows(results):
                       if h["severity"] == "violation"),
             "; ".join(h["vendor"] for h in r.get("post_reject", [])
                       if h["severity"] == "violation"),
+            "; ".join(f"{c['state']} {c['check']}"
+                      for c in r.get("state_checks", [])
+                      if c["status"] == "fail"),
             "; ".join(f"{p['product']} {p['fired']}/{p['expected']}"
                       for p in r.get("products", [])),
             "; ".join(p["product"] for p in r.get("products", [])
@@ -111,6 +116,8 @@ def needs_alert(results):
             return True
         if any(h["severity"] == "violation"
                for h in r.get("post_reject", [])):
+            return True
+        if any(c["status"] == "fail" for c in r.get("state_checks", [])):
             return True
         for p in r.get("products", []):
             if p["fired"] == 0:            # bought product, nothing firing
@@ -170,8 +177,8 @@ def main():
     workers = max(1, min(int(os.environ.get("SCAN_CONCURRENCY", "2")), 4))
 
     def _one(job):
-        s, prods, name = job
-        r = scan_site(s, prefer_full=True, products=prods)
+        s, prods, name, sts = job
+        r = scan_site(s, prefer_full=True, products=prods, states=sts)
         r["client_name"] = name
         return r
 

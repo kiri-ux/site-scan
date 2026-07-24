@@ -52,6 +52,8 @@ def init_db():
                     NOT NULL DEFAULT TRUE;
             ALTER TABLE schedule
                 ADD COLUMN IF NOT EXISTS client_name TEXT NOT NULL DEFAULT '';
+            ALTER TABLE schedule
+                ADD COLUMN IF NOT EXISTS states TEXT NOT NULL DEFAULT '';
         """)
 
 
@@ -111,32 +113,34 @@ def list_sites():
         return []
     with _conn() as cn, cn.cursor() as cur:
         cur.execute("""SELECT url, frequency, products, conversion_urls,
-                              include_conversions, client_name
+                              include_conversions, client_name, states
                        FROM schedule ORDER BY client_name, url""")
         return [{"url": u, "frequency": f,
                  "products": [p for p in (pr or "").split(",") if p],
                  "conversion_urls": [c for c in (cv or "").splitlines() if c.strip()],
                  "include_conversions": bool(inc),
-                 "client_name": name or ""}
-                for u, f, pr, cv, inc, name in cur.fetchall()]
+                 "client_name": name or "",
+                 "states": [s for s in (st or "").split(",") if s]}
+                for u, f, pr, cv, inc, name, st in cur.fetchall()]
 
 
 def upsert_site(url, frequency, products="", conversion_urls="",
-                include_conversions=True, client_name=""):
+                include_conversions=True, client_name="", states=""):
     with _conn() as cn, cn.cursor() as cur:
         cur.execute("""
             INSERT INTO schedule (url, frequency, products,
                                   conversion_urls, include_conversions,
-                                  client_name)
-            VALUES (%s, %s, %s, %s, %s, %s)
+                                  client_name, states)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (url) DO UPDATE
                 SET frequency = EXCLUDED.frequency,
                     products = EXCLUDED.products,
                     conversion_urls = EXCLUDED.conversion_urls,
                     include_conversions = EXCLUDED.include_conversions,
-                    client_name = EXCLUDED.client_name
+                    client_name = EXCLUDED.client_name,
+                    states = EXCLUDED.states
         """, (url, frequency, products, conversion_urls,
-              bool(include_conversions), client_name[:200]))
+              bool(include_conversions), client_name[:200], states))
 
 
 def delete_site(url):

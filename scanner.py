@@ -21,6 +21,8 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
+from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
+                          LAST_REVIEWED, REVIEW_INTERVAL_DAYS)
 from signatures import (CMP_SIGNATURES, TRACKER_ENDPOINTS, PRODUCT_PIXELS,
                         ACCEPT_SELECTORS, GENERIC_ACCEPT_TEXT,
                         STRICT_ACCEPT_TEXT, REJECT_SELECTORS,
@@ -164,6 +166,12 @@ def _empty_result(url):
         "accept_clicked": False,    # did the scan simulate clicking Accept
         "reject_tested": False,     # did the scan click Reject on a fresh load
         "post_reject": [],          # trackers that fired AFTER Reject
+        "states": [],               # state targets requested for this scan
+        "gpc_tested": False,        # did a GPC-signal page load run
+        "gpc_fires": [],            # ad trackers contacted despite GPC
+        "optout_link": None,        # matched opt-out link text, or None
+        "state_checks": [],         # [{state, check, status, detail}]
+        "check_map_reviewed": LAST_REVIEWED,
         "post_consent": [],         # tracker vendors that fired only after accept
         "products": [],             # [{product, expected, fired, pixels:[...]}]
         "verdict": None,
@@ -214,7 +222,7 @@ def basic_scan(url, result=None):
 
 # ---------------------------------------------------------------- tier 2
 
-def _full_scan_impl(browser, url, products=None):
+def _full_scan_impl(browser, url, products=None, states=None):
     result = _empty_result(url)
     result["mode"] = "full"
     requests_seen = []  # (timestamp, url)
@@ -309,6 +317,11 @@ def _full_scan_impl(browser, url, products=None):
                         pass
             result["banner_visible"] = visible
         # else stays "unknown" - nothing to look for
+
+        # --- opt-out link detection (state-law check input)
+        low_html = html.lower()
+        result["optout_link"] = next(
+            (p for p in OPTOUT_LINK_PHRASES if p in low_html), None)
 
         # --- GTM presence
         gtm_ids = sorted(set(GTM_ID_RE.findall(html + "\n" + net_corpus)))
@@ -428,6 +441,92 @@ def _full_scan_impl(browser, url, products=None):
             except Exception:
                 pass
 
+    # --- GPC pass: load with the Global Privacy Control signal set and
+    #     see whether ad trackers are still contacted. Runs only when a
+    #     targeted state requires honoring universal opt-out signals.
+    states = [s for s in (states or []) if s in STATE_CHECKS]
+    result["states"] = states
+    if result["ok"] and any(STATE_CHECKS[s].get("gpc") for s in states):
+        gpc_seen = []
+        ctx3 = browser.new_context(
+            user_agent=UA, locale="en-US",
+            viewport={"width": 1366, "height": 900},
+            extra_http_headers={"Sec-GPC": "1"})
+        pg3 = ctx3.new_page()
+        pg3.add_init_script(
+            "Object.defineProperty(navigator, 'globalPrivacyControl', "
+            "{get: () => true});")
+        pg3.on("request", lambda req: gpc_seen.append(req.url))
+
+        def _route3(route):
+            if route.request.resource_type in ("image", "media", "font"):
+                route.abort()
+            else:
+                route.continue_()
+        pg3.route("**/*", _route3)
+        try:
+            pg3.goto(url, wait_until="domcontentloaded",
+                     timeout=PAGE_TIMEOUT_MS)
+            try:
+                pg3.wait_for_load_state("networkidle",
+                                        timeout=NETIDLE_PRE_MS)
+            except Exception:
+                pass
+            time.sleep(SETTLE_SECONDS)
+            result["gpc_tested"] = True
+            gpc_vendors = {}
+            for u in gpc_seen:
+                tracker = _classify_tracker(u)
+                if not tracker or tracker["vendor"] in gpc_vendors:
+                    continue
+                if tracker["google"] and _gcs_denied(u):
+                    continue
+                gpc_vendors[tracker["vendor"]] = u
+            result["gpc_fires"] = [
+                {"vendor": v, "url": u[:220]}
+                for v, u in sorted(gpc_vendors.items())]
+        except Exception:
+            pass
+        finally:
+            try:
+                ctx3.close()
+            except Exception:
+                pass
+
+    # --- per-state check results
+    for s in states:
+        cfg = STATE_CHECKS[s]
+        if cfg.get("gpc"):
+            if not result["gpc_tested"]:
+                result["state_checks"].append(
+                    {"state": s, "check": "GPC signal", "status": "unknown",
+                     "detail": "GPC page load did not complete."})
+            elif result["gpc_fires"]:
+                names = ", ".join(f["vendor"] for f in result["gpc_fires"])
+                result["state_checks"].append(
+                    {"state": s, "check": "GPC signal", "status": "fail",
+                     "detail": f"Ad trackers contacted despite the GPC "
+                               f"signal: {names}. Honoring universal opt-out "
+                               f"signals is required for {cfg['name']} "
+                               f"targeting."})
+            else:
+                result["state_checks"].append(
+                    {"state": s, "check": "GPC signal", "status": "pass",
+                     "detail": "No ad trackers contacted on a GPC page "
+                               "load."})
+        if cfg.get("optout_link"):
+            if result["optout_link"]:
+                result["state_checks"].append(
+                    {"state": s, "check": "Opt-out link", "status": "pass",
+                     "detail": f'Found "{result["optout_link"]}" on the '
+                               f"page."})
+            else:
+                result["state_checks"].append(
+                    {"state": s, "check": "Opt-out link", "status": "fail",
+                     "detail": "No recognizable opt-out link text found on "
+                               "this page. An accessible opt-out method is "
+                               f"expected for {cfg['name']} targeting."})
+
     # --- phase split: everything before the Accept click is pre-consent;
     #     everything after is post-consent. No click => all pre-consent.
     pre_urls = [u for t, u in requests_seen
@@ -526,8 +625,8 @@ import threading as _threading
 
 
 class _ScanJob:
-    def __init__(self, url, products):
-        self.url, self.products = url, products
+    def __init__(self, url, products, states=None):
+        self.url, self.products, self.states = url, products, states
         self.done = _threading.Event()
         self.result, self.error = None, None
 
@@ -553,7 +652,7 @@ class _BrowserWorker(_threading.Thread):
                 if self.browser is None or not self.browser.is_connected():
                     self._launch()
                 job.result = _full_scan_impl(self.browser, job.url,
-                                             job.products)
+                                             job.products, job.states)
             except Exception as first_err:
                 # browser may have died - relaunch once and retry
                 try:
@@ -565,7 +664,7 @@ class _BrowserWorker(_threading.Thread):
                     self.browser = None
                     self._launch()
                     job.result = _full_scan_impl(self.browser, job.url,
-                                                 job.products)
+                                                 job.products, job.states)
                 except Exception:
                     job.error = first_err
             finally:
@@ -594,11 +693,11 @@ class _BrowserPool:
                 w.start()
                 self.workers.append(w)
 
-    def run(self, url, products):
+    def run(self, url, products, states=None):
         self._ensure()
         if self.init_error:
             raise ImportError(str(self.init_error))
-        job = _ScanJob(url, products)
+        job = _ScanJob(url, products, states)
         self.jobs.put(job)
         if not job.done.wait(timeout=120):
             raise TimeoutError("Scan timed out in browser pool")
@@ -610,8 +709,8 @@ class _BrowserPool:
 _pool = _BrowserPool()
 
 
-def full_scan(url, products=None):
-    return _pool.run(url, products)
+def full_scan(url, products=None, states=None):
+    return _pool.run(url, products, states)
 
 
 # ---------------------------------------------------------------- verdict
@@ -653,7 +752,16 @@ def _apply_verdict(r):
         r["verdict"] = "misconfigured"
         r["verdict_detail"] = ("Consent looks gated on Accept, but trackers "
                                "fire after the user clicks Reject.")
+    state_fails = [c for c in r.get("state_checks", [])
+                   if c["status"] == "fail"]
+    if state_fails and r["verdict"] == "ok":
+        r["verdict"] = "misconfigured"
+        r["verdict_detail"] = ("Consent gating looks correct, but "
+                               "state-targeting checks fail.")
     lines = [r["verdict_detail"]] if r["verdict_detail"] else []
+    if state_fails:
+        failed = sorted({f"{c['state']} {c['check']}" for c in state_fails})
+        lines.append("State checks failing: " + ", ".join(failed) + ".")
     if r.get("reject_tested"):
         lines.append("Reject honored: no trackers fired after Reject."
                      if not rej_viol else
@@ -678,7 +786,7 @@ def _apply_verdict(r):
 
 # ---------------------------------------------------------------- entry
 
-def scan_site(raw_url, prefer_full=True, products=None):
+def scan_site(raw_url, prefer_full=True, products=None, states=None):
     url = normalize_url(raw_url)
     if not url:
         r = _empty_result(raw_url or "")
@@ -687,7 +795,7 @@ def scan_site(raw_url, prefer_full=True, products=None):
 
     if prefer_full:
         try:
-            return _apply_verdict(full_scan(url, products=products))
+            return _apply_verdict(full_scan(url, products=products, states=states))
         except ImportError:
             pass  # Playwright not installed - fall through to basic
         except Exception as e:

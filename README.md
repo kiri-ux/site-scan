@@ -215,3 +215,21 @@ banner visibility, Consent Mode, or pre-consent fires.
   shared by both pages.
 - Links are unauthenticated (like the app itself) - treat them as
   "anyone with the link" until a password gate is added.
+
+## v0.10.0 - state targeting, GPC test, opt-out link check
+- State targets chip row (20 tracked states). Selections save with runs
+  and recurring sites, restore on Edit, export to CSV.
+- GPC pass: when a targeted state requires universal opt-out signals, a
+  third page load carries Sec-GPC: 1 + navigator.globalPrivacyControl
+  and records ad trackers contacted anyway. Adds ~5-8s.
+- Opt-out link detection: recognizable opt-out phrases searched in the
+  rendered page.
+- Per-state check results (pass/fail with check-based language, never
+  legal conclusions) render as a chain cell, detail section, row badge,
+  verdict line, CSV columns, and daily-alert trigger.
+- Check map lives in state_checks.py with citations, LAST_REVIEWED
+  date, and a 120-day staleness window; a formatted copy for counsel
+  review ships as state-law-check-map.docx. Twelve states currently
+  require GPC honoring (verified against current reporting at build
+  time); NJ/MD/MN dates flagged for counsel verification.
+- /favicon.ico now redirects to the SVG favicon for stubborn browsers.

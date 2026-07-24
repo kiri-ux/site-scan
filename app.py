@@ -14,6 +14,7 @@ from flask import Flask, jsonify, render_template, request
 import db
 from scanner import scan_site, normalize_url
 from signatures import PRODUCT_NAMES
+from state_checks import STATE_CODES
 
 app = Flask(__name__)
 
@@ -41,9 +42,11 @@ def scan():
     data = request.get_json(silent=True) or {}
     products = [p for p in (data.get("products") or [])
                 if p in PRODUCT_NAMES]
+    states = [s for s in (data.get("states") or []) if s in STATE_CODES]
     result = scan_site(data.get("url", ""),
                        prefer_full=bool(data.get("full", True)),
-                       products=products or None)
+                       products=products or None,
+                       states=states or None)
     result["client_name"] = str(data.get("client_name", ""))[:200]
     result["run_id"] = str(data.get("run_id", ""))[:64]
     if result["ok"]:
@@ -90,9 +93,11 @@ def upsert_site():
     conversion_urls = "\n".join(c.strip() for c in conv if c.strip())[:8000]
     include_conversions = bool(data.get("include_conversions", True))
     client_name = str(data.get("client_name", ""))
+    states = ",".join(s for s in (data.get("states") or [])
+                      if s in STATE_CODES)
     try:
         db.upsert_site(url, freq, products, conversion_urls,
-                       include_conversions, client_name)
+                       include_conversions, client_name, states)
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -130,6 +135,12 @@ def api_run(run_id):
     except Exception as e:
         print(f"api_run failed: {e}")
         return jsonify({"results": []})
+
+
+@app.get("/favicon.ico")
+def favicon_ico():
+    # Some browsers request /favicon.ico regardless of the link tag.
+    return app.redirect("/static/favicon.svg", code=302)
 
 
 @app.get("/health")
