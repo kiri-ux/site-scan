@@ -80,8 +80,9 @@ def load_sites():
 
 def to_rows(results):
     head = ["url", "verdict", "cmp", "banner_visible", "consent_mode_default",
-            "pre_consent_violations", "product_pixels", "products_missing",
-            "accept_clicked", "detail", "scanned_at"]
+            "pre_consent_violations", "post_reject_violations",
+            "product_pixels", "products_missing",
+            "accept_clicked", "reject_tested", "detail", "scanned_at"]
     rows = [head]
     for r in results:
         rows.append([
@@ -90,11 +91,14 @@ def to_rows(results):
             str(r["banner_visible"]), str(r["consent_mode_default"]),
             "; ".join(h["vendor"] for h in r["pre_consent"]
                       if h["severity"] == "violation"),
+            "; ".join(h["vendor"] for h in r.get("post_reject", [])
+                      if h["severity"] == "violation"),
             "; ".join(f"{p['product']} {p['fired']}/{p['expected']}"
                       for p in r.get("products", [])),
             "; ".join(p["product"] for p in r.get("products", [])
                       if p["fired"] == 0),
             str(r.get("accept_clicked", False)),
+            str(r.get("reject_tested", False)),
             r["verdict_detail"] or r["error"] or "",
             r["scanned_at"],
         ])
@@ -104,6 +108,9 @@ def to_rows(results):
 def needs_alert(results):
     for r in results:
         if r["verdict"] in ("no_cmp", "misconfigured", "error"):
+            return True
+        if any(h["severity"] == "violation"
+               for h in r.get("post_reject", [])):
             return True
         for p in r.get("products", []):
             if p["fired"] == 0:            # bought product, nothing firing

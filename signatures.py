@@ -164,6 +164,30 @@ ACCEPT_SELECTORS = {
     "Axeptio": ["#axeptio_btn_acceptAll"],
 }
 
+# Reject/decline controls per CMP, for the reject-path test: click
+# Reject, then verify no trackers fire. Only confident direct-reject
+# selectors here - ambiguous secondary buttons are left to the strict
+# text fallback so we never mis-click.
+REJECT_SELECTORS = {
+    "OneTrust": ["#onetrust-reject-all-handler"],
+    "Cookiebot": ["#CybotCookiebotDialogBodyButtonDecline"],
+    "Usercentrics": ["[data-testid='uc-deny-all-button']"],
+    "iubenda": [".iubenda-cs-reject-btn"],
+    "Osano": [".osano-cm-denyAll", ".osano-cm-deny"],
+    "CookieYes": [".cky-btn-reject"],
+    "Termly": ["[data-tid='banner-decline']"],
+    "Didomi": ["#didomi-notice-disagree-button"],
+    "Complianz (WordPress)": [".cmplz-deny"],
+    "CookieLawInfo / WebToffee (WordPress)": [
+        ".cli_action_button[data-cli_action='reject']"],
+    "Axeptio": ["#axeptio_btn_refuseAll"],
+}
+
+STRICT_REJECT_TEXT = (r"^\s*(reject( all)?( cookies)?|decline( all)?|"
+                      r"disagree|refuse( all)?|deny( all)?|"
+                      r"only (necessary|essential)( cookies)?|"
+                      r"necessary (cookies )?only)\s*$")
+
 # Generic fallback when no CMP-specific accept selector matches.
 GENERIC_ACCEPT_TEXT = r"accept all|allow all|accept cookies|accept|agree|allow|got it"
 # Stricter anchored pattern for links/[role=button] - avoids clicking

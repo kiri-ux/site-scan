@@ -193,3 +193,16 @@ banner visibility, Consent Mode, or pre-consent fires.
   trackers list as neutral "ungated" inventory, and the red flag stays
   on the site-level missing-CMP verdict. VIOLATION is reserved for a
   present-but-bypassed consent setup.
+
+## v0.9.3 - reject-path testing, conversion URL pills
+- Reject-path test: when a CMP with a visible banner is found, a second
+  fresh page load clicks Reject/Decline (direct-reject selectors for 11
+  CMPs + strictly-anchored text fallback that never guesses) and checks
+  nothing fires afterward. Trackers firing post-Reject are flagged
+  "fires after reject" (row badge, chain cell "Reject honored", verdict
+  line, CSV column, and daily alert). "No reject option" is reported
+  neutrally - common and lawful on US opt-out banners. Adds ~6-9s per
+  CMP page.
+- Conversion URLs input converted to pills: type or paste (multi-line
+  paste splits automatically), Enter to add, x or Backspace to remove.
+  Duplicates of the main site or each other are rejected at entry.

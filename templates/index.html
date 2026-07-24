@@ -69,6 +69,13 @@
   .field-label .opt{font-family:'Barlow',sans-serif;text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);font-size:12.5px}
   .text-input{width:100%;border:1px solid var(--line);border-radius:8px;padding:11px 14px;font:14px 'Barlow',sans-serif;background:#FCFCFB;color:var(--ink)}
   .text-input:focus{outline:2px solid var(--velocity);outline-offset:1px}
+  .pillbox{display:flex;flex-wrap:wrap;gap:7px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#FCFCFB;cursor:text;min-height:44px}
+  .pillbox:focus-within{outline:2px solid var(--velocity);outline-offset:1px}
+  .urlpill{display:inline-flex;align-items:center;gap:7px;background:var(--info-bg);color:var(--atlas);font-size:13px;font-weight:500;border-radius:14px;padding:4px 6px 4px 12px;max-width:100%}
+  .urlpill .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px}
+  .urlpill .x{background:none;border:none;color:var(--velocity);font-size:13px;font-weight:700;cursor:pointer;padding:0 5px;line-height:1}
+  .urlpill .x:hover{color:var(--bad)}
+  #conv-input{flex:1;min-width:180px;border:none;outline:none;background:transparent;font:14px 'Barlow',sans-serif;color:var(--ink);padding:4px 2px}
   .chips{display:flex;flex-wrap:wrap;gap:8px}
   .chip{font-family:'Barlow',sans-serif;font-size:13.5px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:20px;padding:7px 15px;cursor:pointer}
   .chip.on{background:var(--atlas);border-color:var(--atlas);color:#fff}
@@ -167,8 +174,10 @@
     <input id="client-name" type="text" class="text-input" placeholder="Town &amp; Country Ford">
     <label class="field-label" for="site-url">Client website</label>
     <input id="site-url" type="text" class="text-input" placeholder="clientsite.com">
-    <label class="field-label" for="urls">Conversion URLs to check <span class="opt">(optional, one per line - landing pages, thank-you pages)</span></label>
-    <textarea id="urls" placeholder="clientsite.com/schedule-service&#10;clientsite.com/thank-you"></textarea>
+    <label class="field-label" for="conv-input">Conversion URLs to check <span class="opt">(optional - landing pages, thank-you pages. Type or paste, Enter to add)</span></label>
+    <div class="pillbox" id="conv-pillbox" onclick="document.getElementById('conv-input').focus()">
+      <input id="conv-input" type="text" placeholder="clientsite.com/thank-you">
+    </div>
     <label class="field-label">Products <span class="opt">(select what this client runs - unselected products are still detected if seen)</span></label>
     <div class="chips" id="product-chips"></div>
     <div class="hint">Full scan loads each page in a headless browser, records pre-consent fires, clicks Accept, then verifies the selected products' pixels. Roughly 15&ndash;40 seconds per page.</div>
@@ -212,6 +221,29 @@ let results = [];
 let dbEnabled = false;
 const PRODUCTS = ['Amazon','BARCK+','LinkedIn','Meta','Mobile','PPC','Performance Max','TikTok','WVID'];
 let selectedProducts = [];
+let convUrls = [];
+function renderConvPills(){
+  const box = $('conv-pillbox');
+  box.querySelectorAll('.urlpill').forEach(el => el.remove());
+  const input = $('conv-input');
+  convUrls.forEach((u, i) => {
+    const pill = document.createElement('span');
+    pill.className = 'urlpill';
+    pill.innerHTML = `<span class="txt" title="${u.replace(/"/g,'&quot;')}">${u}</span><button type="button" class="x" aria-label="Remove ${u}">&times;</button>`;
+    pill.querySelector('.x').onclick = e => { e.stopPropagation(); convUrls.splice(i, 1); renderConvPills(); };
+    box.insertBefore(pill, input);
+  });
+}
+function addConvUrls(text){
+  text.split(/[\n,]/).map(s => s.trim()).filter(Boolean).forEach(u => {
+    const key = normUrl(u);
+    if (!key) return;
+    if (convUrls.some(x => normUrl(x) === key)) return;
+    if (normUrl($('site-url').value) === key) return; // main site wins
+    convUrls.push(u);
+  });
+  renderConvPills();
+}
 function renderChips(){
   $('product-chips').innerHTML = PRODUCTS.map(p =>
     `<button type="button" class="chip ${selectedProducts.includes(p)?'on':''}" onclick="toggleProduct('${p.replace(/'/g,"\\'")}')">${p}</button>`).join('');
@@ -315,7 +347,7 @@ function editSite(i){
   const s = schedSites[i];
   $('client-name').value = s.client_name || '';
   $('site-url').value = s.url;
-  $('urls').value = (s.conversion_urls || []).join('\n');
+  convUrls = [...(s.conversion_urls || [])]; renderConvPills();
   selectedProducts = [...(s.products || [])];
   $('sched-freq').value = s.frequency === 'off' ? 'daily' : s.frequency;
   renderChips();
@@ -325,7 +357,8 @@ function editSite(i){
 async function addSite(){
   const url = $('site-url').value.trim();
   if (!url) { $('site-url').focus(); return; }
-  const conv = dedupeUrls(url, $('urls').value.split('\n')).slice(1);
+  if ($('conv-input').value.trim()){ addConvUrls($('conv-input').value); $('conv-input').value = ''; }
+  const conv = dedupeUrls(url, convUrls).slice(1);
   const resp = await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({url, frequency: $('sched-freq').value,
       products: selectedProducts, conversion_urls: conv,
@@ -353,6 +386,7 @@ const CHAIN_TIPS = {
   'Consent Mode default': 'Whether Google Consent Mode defaults (e.g. ad_storage=denied) are set before any interaction. Without them, Google tags treat consent as granted and the consent checks in GTM do nothing.',
   'Pre-consent trackers': 'Ad/analytics requests that fired BEFORE any consent interaction. Non-Google fires are compliance violations; Google fires may be permitted cookieless Consent Mode pings.',
   'Product pixels': 'Vici product pixels seen on this page, firing vs expected (e.g. BARCK+ 3/5). Products selected for this client that show 0 firing are flagged as missing.',
+  'Reject honored': 'A fresh page load where the scan clicks Reject/Decline instead of Accept, then checks nothing fires. Trackers firing after an explicit Reject is the failure driving most consent litigation. "No reject option" is common on US opt-out banners.',
 };
 function chainLink(k, v, state){
   return `<div class="link ${state}" title="${CHAIN_TIPS[k] || ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
@@ -380,6 +414,11 @@ function chainFor(r){
   const prodLabel = r.mode !== 'full' ? 'Unknown'
                   : !prods.length ? (r.accept_clicked ? 'None seen' : 'Unverified')
                   : prods.map(p => p.expected > 1 ? `${p.product} ${p.fired}/${p.expected}` : p.product).join(', ');
+  const rejViol = (r.post_reject || []).filter(h => h.severity === 'violation');
+  const rejState = !r.reject_tested ? 'mid' : rejViol.length ? 'fail' : 'pass';
+  const rejLabel = !r.reject_tested
+      ? (r.cmps.length && r.banner_visible === true ? 'No reject option' : 'Untested')
+      : rejViol.length ? `${rejViol.length} firing` : 'Yes';
   const fmt = v => v === true ? 'Yes' : v === false ? 'No' : 'Unknown';
   return `<div class="chain">
       ${chainLink('CMP', r.cmps.length ? cmpNames : (r.ok ? 'None found' : 'Unknown'), cmpState)}
@@ -387,6 +426,7 @@ function chainFor(r){
       ${chainLink('Consent Mode default', fmt(r.consent_mode_default), cmState)}
       ${chainLink('Pre-consent trackers', fireLabel, fireState)}
       ${chainLink('Product pixels', prodLabel, prodState)}
+      ${chainLink('Reject honored', rejLabel, rejState)}
     </div>`;
 }
 
@@ -428,12 +468,19 @@ function renderSite(r, i){
     }).join('')
     : `<p class="kv">${r.accept_clicked ? 'No product pixels observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';
 
+  const rejFires = (r.post_reject || []).length ? `<h3>Requests after Reject</h3><ul>` + r.post_reject.map(h =>
+      `<li><span class="badge ${h.severity==='violation'?'bad':'warn'}">${h.severity}</span>
+        <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+    : (r.reject_tested ? `<h3>Requests after Reject</h3><p class="kv">No trackers fired after Reject - the decline path is honored.</p>` : '');
+
   const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>
       `<li><span class="badge ok">post-consent</span><div><b>${h.vendor}</b><div class="u">${h.url}</div></div></li>`).join('') + `</ul>` : '';
 
   const missingProds = prods.filter(p => p.fired === 0);
+  const rejV = (r.post_reject || []).some(h => h.severity === 'violation');
   const headBadges = [
-    r.verdict === 'misconfigured' ? '<span class="badge bad">pre-consent fires</span>' : '',
+    rejV ? '<span class="badge bad">fires after reject</span>' : '',
+    r.verdict === 'misconfigured' && !rejV ? '<span class="badge bad">pre-consent fires</span>' : '',
     missingProds.length ? '<span class="badge bad">pixels missing</span>' : '',
     r.verdict === 'error' ? '<span class="badge warn">scan error</span>' : '',
     r.mode !== 'full' ? `<span class="badge neutral">${r.mode}</span>` : '',
@@ -457,7 +504,7 @@ function renderSite(r, i){
       ${chain}
       <div class="verdict ${meta.cls}">${(r.verdict_lines && r.verdict_lines.length ? r.verdict_lines : [r.verdict_detail || r.error || '']).map(l => `<div class="vline">${l}</div>`).join('')}</div>
       ${kvBits.length ? `<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px">${kvBits.join('')}</div>` : ''}
-      <div class="detail">${cmpDetail}${fires}${dspDetail}${gated}</div>
+      <div class="detail">${cmpDetail}${fires}${rejFires}${dspDetail}${gated}</div>
     </div>
   </div>`;
 }
@@ -528,7 +575,7 @@ function editRun(key){
   const main = mainItem(g);
   $('client-name').value = g.name || '';
   $('site-url').value = main.r.url;
-  $('urls').value = g.items.filter(it => it !== main).map(it => it.r.url).join('\n');
+  convUrls = g.items.filter(it => it !== main).map(it => it.r.url); renderConvPills();
   // selected products = products reported on the main page (selection mode
   // reports all selected incl. 0-firing; detect-any reports fired only)
   selectedProducts = (main.r.products || []).map(p => p.product)
@@ -578,8 +625,9 @@ function dedupeUrls(main, convLines){
   return out;
 }
 async function run(){
+  if ($('conv-input').value.trim()){ addConvUrls($('conv-input').value); $('conv-input').value = ''; }
   const main = $('site-url').value.trim();
-  const urls = dedupeUrls(main, $('urls').value.split('\n'));
+  const urls = dedupeUrls(main, convUrls);
   if (!urls.length) return;
   const full = $('fullmode').checked;
   const runId = newRunId();
@@ -663,6 +711,17 @@ function toCsv(){
 $('go').addEventListener('click', run);
 $('csv').addEventListener('click', toCsv);
 $('sched-add').addEventListener('click', addSite);
+$('conv-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter'){ e.preventDefault(); addConvUrls(e.target.value); e.target.value = ''; }
+  else if (e.key === 'Backspace' && !e.target.value && convUrls.length){ convUrls.pop(); renderConvPills(); }
+});
+$('conv-input').addEventListener('paste', e => {
+  e.preventDefault();
+  addConvUrls((e.clipboardData || window.clipboardData).getData('text'));
+});
+$('conv-input').addEventListener('blur', e => {
+  if (e.target.value.trim()){ addConvUrls(e.target.value); e.target.value = ''; }
+});
 renderChips();
 restoreResults();
 loadSchedule();

@@ -23,7 +23,8 @@ from bs4 import BeautifulSoup
 
 from signatures import (CMP_SIGNATURES, TRACKER_ENDPOINTS, PRODUCT_PIXELS,
                         ACCEPT_SELECTORS, GENERIC_ACCEPT_TEXT,
-                        STRICT_ACCEPT_TEXT)
+                        STRICT_ACCEPT_TEXT, REJECT_SELECTORS,
+                        STRICT_REJECT_TEXT)
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
@@ -74,21 +75,30 @@ def _classify_tracker(url):
 
 
 def _try_accept(page, cmp_names, wait_seconds=4):
-    """Click the consent banner's Accept control. Returns the click
-    timestamp, or None if nothing clickable was found.
-
-    Strategy, in order:
-      1. CMP-specific selectors, retried for up to `wait_seconds` across
-         EVERY frame (banners often render late, and TrustArc/Quantcast
-         and others render inside an iframe).
-      2. Any visible <button> whose text loosely matches accept language.
-      3. Links / [role=button] with STRICTLY anchored accept text - last
-         because clicking a look-alike link can navigate away.
-    Playwright selectors pierce open shadow DOM (Usercentrics) natively.
-    """
+    """Click the banner's Accept control. Returns click timestamp or None."""
     selectors = [sel for name in cmp_names
                  for sel in ACCEPT_SELECTORS.get(name, [])]
+    return _try_click(page, selectors,
+                      re.compile(GENERIC_ACCEPT_TEXT, re.I),
+                      re.compile(STRICT_ACCEPT_TEXT, re.I), wait_seconds)
 
+
+def _try_reject(page, cmp_names, wait_seconds=4):
+    """Click the banner's Reject/Decline control. Loose pass uses the
+    STRICT pattern too - reject wording is where a sloppy match could
+    click the wrong thing, so both passes stay anchored."""
+    selectors = [sel for name in cmp_names
+                 for sel in REJECT_SELECTORS.get(name, [])]
+    strict = re.compile(STRICT_REJECT_TEXT, re.I)
+    return _try_click(page, selectors, strict, strict, wait_seconds)
+
+
+def _try_click(page, selectors, loose, strict, wait_seconds=4):
+    """Shared click machinery: CMP-specific selectors retried for up to
+    `wait_seconds` across EVERY frame (iframe banners), then visible
+    <button>s matching `loose`, then links/[role=button] matching
+    `strict`. Playwright selectors pierce open shadow DOM natively.
+    Returns the click timestamp, or None."""
     deadline = time.time() + wait_seconds
     while time.time() < deadline:
         for frame in page.frames:
@@ -103,8 +113,6 @@ def _try_accept(page, cmp_names, wait_seconds=4):
                     pass
         time.sleep(0.5)
 
-    loose = re.compile(GENERIC_ACCEPT_TEXT, re.I)
-    strict = re.compile(STRICT_ACCEPT_TEXT, re.I)
     for pattern, css in ((loose, "button"),
                          (strict, "a, [role='button'], input[type='button'], "
                                   "input[type='submit']")):
@@ -154,6 +162,8 @@ def _empty_result(url):
         "consent_defaults": {},            # e.g. {"ad_storage": "denied"}
         "pre_consent": [],          # [{vendor, url, severity, note}]
         "accept_clicked": False,    # did the scan simulate clicking Accept
+        "reject_tested": False,     # did the scan click Reject on a fresh load
+        "post_reject": [],          # trackers that fired AFTER Reject
         "post_consent": [],         # tracker vendors that fired only after accept
         "products": [],             # [{product, expected, fired, pixels:[...]}]
         "verdict": None,
@@ -356,6 +366,67 @@ def _full_scan_impl(browser, url, products=None):
             time.sleep(SETTLE_SECONDS)  # let consent-gated tags fire
 
         context.close()
+
+    # --- reject pass: fresh context (no cookies), load, click Reject,
+    #     record what fires afterward. The actively-litigated failure is
+    #     "user said no and the pixel fired anyway".
+    if result["ok"] and result["cmps"] and result["banner_visible"] is True:
+        rej_seen = []
+        ctx2 = browser.new_context(user_agent=UA, locale="en-US",
+                                   viewport={"width": 1366, "height": 900})
+        pg2 = ctx2.new_page()
+        pg2.on("request",
+               lambda req: rej_seen.append((time.time(), req.url)))
+
+        def _route2(route):
+            if route.request.resource_type in ("image", "media", "font"):
+                route.abort()
+            else:
+                route.continue_()
+        pg2.route("**/*", _route2)
+        try:
+            pg2.goto(url, wait_until="domcontentloaded",
+                     timeout=PAGE_TIMEOUT_MS)
+            try:
+                pg2.wait_for_load_state("networkidle",
+                                        timeout=NETIDLE_PRE_MS)
+            except Exception:
+                pass
+            time.sleep(1.0)
+            rt = _try_reject(pg2, [c["name"] for c in result["cmps"]])
+            if rt is not None:
+                result["reject_tested"] = True
+                try:
+                    pg2.wait_for_load_state("networkidle",
+                                            timeout=NETIDLE_POST_MS)
+                except Exception:
+                    pass
+                time.sleep(SETTLE_SECONDS)
+                seen_rej = set()
+                for t, u in rej_seen:
+                    if t < rt:
+                        continue
+                    tracker = _classify_tracker(u)
+                    if not tracker or tracker["vendor"] in seen_rej:
+                        continue
+                    seen_rej.add(tracker["vendor"])
+                    if tracker["google"] and _gcs_denied(u):
+                        continue  # denied-state ping - correct behavior
+                    sev = "warn" if tracker["google"] else "violation"
+                    note = ("Google request after Reject - verify the "
+                            "consent state in GTM Preview."
+                            if tracker["google"] else
+                            "Fired AFTER the user clicked Reject.")
+                    result["post_reject"].append(
+                        {"vendor": tracker["vendor"], "url": u[:220],
+                         "severity": sev, "note": note})
+        except Exception:
+            pass
+        finally:
+            try:
+                ctx2.close()
+            except Exception:
+                pass
 
     # --- phase split: everything before the Accept click is pre-consent;
     #     everything after is post-consent. No click => all pre-consent.
@@ -576,7 +647,19 @@ def _apply_verdict(r):
         ev = next((c["gtm_event"] for c in r["cmps"] if c["gtm_event"]), None)
         if ev:
             r["verdict_detail"] += f" GTM trigger event: {ev}"
+    rej_viol = [h for h in r.get("post_reject", [])
+                if h["severity"] == "violation"]
+    if rej_viol and r["verdict"] == "ok":
+        r["verdict"] = "misconfigured"
+        r["verdict_detail"] = ("Consent looks gated on Accept, but trackers "
+                               "fire after the user clicks Reject.")
     lines = [r["verdict_detail"]] if r["verdict_detail"] else []
+    if r.get("reject_tested"):
+        lines.append("Reject honored: no trackers fired after Reject."
+                     if not rej_viol else
+                     "Fired after Reject: "
+                     + ", ".join(sorted({h["vendor"] for h in rej_viol}))
+                     + ".")
     prods = r.get("products") or []
     if prods:
         bits = [f"{p['product']} {p['fired']}/{p['expected']}"
