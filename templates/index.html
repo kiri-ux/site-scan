@@ -93,6 +93,8 @@
   .rg-body{display:none;border-top:1px solid var(--line);padding:12px 14px;background:#FBFAF7}
   .rungroup.open .rg-body{display:block}
   .rungroup.open .rg-head .caret{transform:rotate(90deg)}
+  .rg-summary{margin-bottom:12px}
+  .rg-summary .chain{margin:0}
   .rg-body .site{margin-bottom:10px}
   .rg-body .site:last-child{margin-bottom:0}
   details.prod{margin:0 0 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
@@ -171,7 +173,6 @@
     <div class="row">
       <button class="btn-primary" id="go">Scan sites</button>
       <button class="btn-ghost" id="csv" disabled>Download CSV</button>
-      <button class="btn-ghost" id="clear" disabled>Clear results</button>
       <label class="chk"><input type="checkbox" id="fullmode" checked> Full scan (headless browser)</label>
       <span style="flex:1"></span>
       <select id="sched-freq" class="freq-select" title="Frequency for recurring scans">
@@ -355,11 +356,8 @@ function chainLink(k, v, state){
   return `<div class="link ${state}" title="${CHAIN_TIPS[k] || ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
 
-function renderSite(r, i){
-  const meta = VERDICT_META[r.verdict] || VERDICT_META.error;
+function chainFor(r){
   const cmpNames = r.cmps.map(c => c.name).join(', ');
-
-  // chain states
   const cmpState = r.cmps.length ? 'pass' : (r.ok ? 'fail' : 'mid');
   const bannerState = r.banner_visible === true ? 'pass'
                     : r.banner_visible === false ? 'fail' : 'mid';
@@ -370,7 +368,6 @@ function renderSite(r, i){
   const fireState = viol.length ? 'fail' : (warns.length ? 'mid' : (r.mode==='full' ? 'pass' : 'mid'));
   const fireLabel = r.mode !== 'full' ? 'Unknown'
                   : viol.length ? `${viol.length} firing` : (warns.length ? 'Verify' : 'None');
-
   const prods = r.products || [];
   const missing = prods.filter(p => p.fired === 0);
   const partial = prods.filter(p => p.fired > 0 && p.fired < p.expected);
@@ -381,16 +378,20 @@ function renderSite(r, i){
   const prodLabel = r.mode !== 'full' ? 'Unknown'
                   : !prods.length ? (r.accept_clicked ? 'None seen' : 'Unverified')
                   : prods.map(p => p.expected > 1 ? `${p.product} ${p.fired}/${p.expected}` : p.product).join(', ');
-
   const fmt = v => v === true ? 'Yes' : v === false ? 'No' : 'Unknown';
-
-  const chain = `<div class="chain">
+  return `<div class="chain">
       ${chainLink('CMP', r.cmps.length ? cmpNames : (r.ok ? 'None found' : 'Unknown'), cmpState)}
       ${chainLink('Banner visible', fmt(r.banner_visible), bannerState)}
       ${chainLink('Consent Mode default', fmt(r.consent_mode_default), cmState)}
       ${chainLink('Pre-consent trackers', fireLabel, fireState)}
       ${chainLink('Product pixels', prodLabel, prodState)}
     </div>`;
+}
+
+function renderSite(r, i){
+  const cmpNames = r.cmps.map(c => c.name).join(', ');
+  const prods = r.products || [];
+  const chain = chainFor(r);
 
   const gtmEvent = r.cmps.map(c => c.gtm_event).find(Boolean);
   const kvBits = [];
@@ -486,6 +487,11 @@ function groupBadge(items){
   return '<span class="badge ok">looks good</span>';
 }
 
+function mainItem(g){
+  // main site = shortest normalized URL in the run (root beats inner pages)
+  return g.items.reduce((best, it) =>
+    normUrl(it.r.url).length < normUrl(best.r.url).length ? it : best, g.items[0]);
+}
 function renderGroup(g){
   const first = g.items[0].r;
   const title = g.name || first.url;
@@ -500,7 +506,10 @@ function renderGroup(g){
       <button class="rg-del" onclick="event.stopPropagation(); deleteGroup('${g.key.replace(/'/g,"\\'")}')">Delete</button>
       <span class="caret">&#9654;</span>
     </div>
-    <div class="rg-body">${g.items.map(({r, i}) => renderSite(r, i)).join('')}</div>
+    <div class="rg-body">
+      <div class="rg-summary" title="Summary for the main site (shortest URL in this run). Per-page details below.">${chainFor(mainItem(g).r)}</div>
+      ${g.items.map(({r, i}) => renderSite(r, i)).join('')}
+    </div>
   </div>`;
 }
 
@@ -508,7 +517,6 @@ function render(){
   $('empty').style.display = results.length ? 'none' : 'block';
   $('results').innerHTML = groupRuns().map(renderGroup).join('');
   $('csv').disabled = !results.length;
-  $('clear').disabled = !results.length;
 }
 
 async function deleteGroup(key){
@@ -635,16 +643,6 @@ function toCsv(){
 
 $('go').addEventListener('click', run);
 $('csv').addEventListener('click', toCsv);
-$('clear').addEventListener('click', () => {
-  if (dbEnabled) {
-    if (!confirm('Hide results from this view? (Server history is kept - refresh to reload it.)')) return;
-    results = []; render(); return;
-  }
-  if (!confirm('Clear all saved scan results?')) return;
-  results = [];
-  localStorage.removeItem(STORE_KEY);
-  render();
-});
 $('sched-add').addEventListener('click', addSite);
 renderChips();
 restoreResults();

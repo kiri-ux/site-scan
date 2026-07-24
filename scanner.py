@@ -73,7 +73,7 @@ def _classify_tracker(url):
     return None
 
 
-def _try_accept(page, cmp_names, wait_seconds=6):
+def _try_accept(page, cmp_names, wait_seconds=4):
     """Click the consent banner's Accept control. Returns the click
     timestamp, or None if nothing clickable was found.
 
@@ -204,16 +204,12 @@ def basic_scan(url, result=None):
 
 # ---------------------------------------------------------------- tier 2
 
-def full_scan(url, products=None):
-    from playwright.sync_api import sync_playwright  # noqa: deferred import
-
+def _full_scan_impl(browser, url, products=None):
     result = _empty_result(url)
     result["mode"] = "full"
     requests_seen = []  # (timestamp, url)
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(
-            args=["--no-sandbox", "--disable-dev-shm-usage"])
+    if True:  # preserve indentation of the original with-block
         context = browser.new_context(user_agent=UA, locale="en-US",
                                       viewport={"width": 1366, "height": 900})
         page = context.new_page()
@@ -240,7 +236,7 @@ def full_scan(url, products=None):
                 pass  # busy sites never go idle; the settle sleep covers us
             time.sleep(SETTLE_SECONDS)  # let late tags + banner render
         except Exception as e:
-            browser.close()
+            context.close()
             result["error"] = f"Page load failed: {e.__class__.__name__}"
             return result
 
@@ -359,7 +355,7 @@ def full_scan(url, products=None):
                 pass
             time.sleep(SETTLE_SECONDS)  # let consent-gated tags fire
 
-        browser.close()
+        context.close()
 
     # --- phase split: everything before the Accept click is pre-consent;
     #     everything after is post-consent. No click => all pre-consent.
@@ -439,6 +435,106 @@ def full_scan(url, products=None):
             "pixels": pixels,
         })
     return result
+
+
+# ------------------------------------------------------- browser pool
+# Launching Chromium costs 2-3s. Dedicated worker threads each own a
+# persistent Playwright instance + browser (sync API is thread-affine),
+# serving scans from a queue. This both removes launch overhead and
+# hard-caps concurrent browsers at BROWSER_POOL (default 2).
+
+import os as _os
+import queue as _queue
+import threading as _threading
+
+
+class _ScanJob:
+    def __init__(self, url, products):
+        self.url, self.products = url, products
+        self.done = _threading.Event()
+        self.result, self.error = None, None
+
+
+class _BrowserWorker(_threading.Thread):
+    def __init__(self, jobs):
+        super().__init__(daemon=True)
+        self.jobs = jobs
+        self.pw = None
+        self.browser = None
+
+    def _launch(self):
+        from playwright.sync_api import sync_playwright
+        if self.pw is None:
+            self.pw = sync_playwright().start()
+        self.browser = self.pw.chromium.launch(
+            args=["--no-sandbox", "--disable-dev-shm-usage"])
+
+    def run(self):
+        while True:
+            job = self.jobs.get()
+            try:
+                if self.browser is None or not self.browser.is_connected():
+                    self._launch()
+                job.result = _full_scan_impl(self.browser, job.url,
+                                             job.products)
+            except Exception as first_err:
+                # browser may have died - relaunch once and retry
+                try:
+                    try:
+                        if self.browser:
+                            self.browser.close()
+                    except Exception:
+                        pass
+                    self.browser = None
+                    self._launch()
+                    job.result = _full_scan_impl(self.browser, job.url,
+                                                 job.products)
+                except Exception:
+                    job.error = first_err
+            finally:
+                job.done.set()
+
+
+class _BrowserPool:
+    def __init__(self):
+        self.jobs = _queue.Queue()
+        self.workers = []
+        self.lock = _threading.Lock()
+        self.init_error = None
+
+    def _ensure(self):
+        with self.lock:
+            if self.workers or self.init_error:
+                return
+            try:
+                import playwright.sync_api  # noqa: verify availability here
+            except ImportError as e:
+                self.init_error = e
+                return
+            n = max(1, min(int(_os.environ.get("BROWSER_POOL", "2")), 4))
+            for _ in range(n):
+                w = _BrowserWorker(self.jobs)
+                w.start()
+                self.workers.append(w)
+
+    def run(self, url, products):
+        self._ensure()
+        if self.init_error:
+            raise ImportError(str(self.init_error))
+        job = _ScanJob(url, products)
+        self.jobs.put(job)
+        if not job.done.wait(timeout=120):
+            raise TimeoutError("Scan timed out in browser pool")
+        if job.error:
+            raise job.error
+        return job.result
+
+
+_pool = _BrowserPool()
+
+
+def full_scan(url, products=None):
+    return _pool.run(url, products)
 
 
 # ---------------------------------------------------------------- verdict

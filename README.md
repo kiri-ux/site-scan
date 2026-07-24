@@ -166,3 +166,16 @@ banner visibility, Consent Mode, or pre-consent fires.
   multi-pixel products i.e. BARCK+.
 - Removed the unfilled-macros summary chip; the per-pixel explanation
   remains inside the expanded product detail.
+
+## v0.9.0 - browser pool, group summary, UI trims
+- Persistent Chromium pool: BROWSER_POOL worker threads (default 2)
+  each keep a browser alive across scans, removing the 2-3s launch per
+  scan and hard-capping concurrent browsers server-side. Crashed
+  browsers relaunch automatically and the scan retries once. Warm full
+  scans now typically run 4-10s.
+- Each client panel opens with a summary consent chain for the main
+  site (shortest URL in the run), so the client-level verdict reads
+  without expanding page rows.
+- Clear results button removed - per-run Delete covers removal, and
+  refresh reloads server history anyway.
+- Accept-button wait trimmed 6s -> 4s.
