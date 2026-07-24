@@ -156,7 +156,7 @@ def api_run(run_id):
 @app.get("/favicon.ico")
 def favicon_ico():
     # Some browsers request /favicon.ico regardless of the link tag.
-    return app.redirect("/static/favicon.svg", code=302)
+    return app.redirect("/static/favicon.svg?v=2", code=302)
 
 
 @app.get("/health")

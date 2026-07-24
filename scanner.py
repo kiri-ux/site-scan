@@ -368,7 +368,11 @@ def _full_scan_impl(browser, url, products=None, states=None):
         # --- simulate clicking Accept, then watch what fires
         click_time = None
         if result["cmps"]:
-            click_time = _try_accept(page, [c["name"] for c in result["cmps"]])
+            if result["cmps"] or result["banner_visible"] is True:
+                click_time = _try_accept(
+                    page, [c["name"] for c in result["cmps"]])
+            else:
+                click_time = None  # no CMP, no banner - nothing to click
             result["accept_clicked"] = click_time is not None
         if result["accept_clicked"]:
             try:

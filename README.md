@@ -248,3 +248,27 @@ banner visibility, Consent Mode, or pre-consent fires.
   typing/pasting, Edit from a run, Edit from a schedule row, and a
   final sweep at scan time. The server cleans conversion lists on
   schedule save, and the cron skips non-URL lines in legacy rows.
+
+## v0.10.3
+- Favicon links carry a cache-busting version query - Chrome keeps
+  favicons in a separate cache that ignores hard refreshes, and a new
+  URL is the reliable way to evict a stale (missing) icon entry.
+
+## v0.10.4
+- Pasted text yields EVERY URL it contains, not just the first - a line
+  like "url1 + notes: url2" becomes two pills. Same on schedule save.
+  TLD required, so prose and "e.g." never become pills.
+
+## v0.10.5 - heavy-site stall fixes
+- Page-load cap trimmed 30s -> 20s and every context now carries a 15s
+  default CDP timeout, so a wedged call can never wait silently.
+- Accept attempt skipped when no CMP and no banner exist (saves 4s on
+  every no-CMP page).
+- Stale-job handling: if the caller has given up (120s), pool workers
+  skip the job and skip the relaunch-retry instead of grinding through
+  abandoned work and starving the queue - this was the stall cascade
+  on heavy ad-laden sites.
+- Browsers recycle after RECYCLE_AFTER scans (default 8): long-lived
+  Chromium on ad-heavy pages accumulates memory until CDP calls wedge.
+- Every scan logs "[scan] start/done url [verdict] Xs" to stdout, so
+  Render Logs show live per-page progress and timings.
