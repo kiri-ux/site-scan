@@ -398,3 +398,17 @@ banner visibility, Consent Mode, or pre-consent fires.
   existing schedule frequency for saved clients; new clients save with
   the schedule off. Add to recurring continues to save with the chosen
   frequency.
+
+## v0.12.3
+- Legal safeguards section on the Build-vs-market tab and one-pager:
+  check-based language, no compliance claims, scope disclosure,
+  counsel-reviewed ToS with liability cap, E&%O confirmation, alert
+  SOP, check-map review cadence, internal-first sequencing.
+
+## v0.12.3
+- Build-vs-market gains a "Legal posture" section: check-based
+  language, scope disclaimers, ToS/E&O gates, alert-handling SOP, and
+  the quarterly state-map review, condensed from the liability
+  discussion. Also on the one-pager.
+- Run headers fall back to the saved client record for the partner
+  name, so runs scanned before the partner field existed show it too.
