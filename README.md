@@ -416,3 +416,8 @@ banner visibility, Consent Mode, or pre-consent fires.
 ## v0.12.4
 - Legal posture section collapses by default on the Build-vs-market
   tab (and the one-pager, where it auto-expands for printing).
+
+## v0.12.5
+- Hover tooltips on the "pre-consent only" and "ungated" badges
+  explaining what each means and how they differ.
+- Run headers show the partner name plain (no "via").

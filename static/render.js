@@ -101,14 +101,14 @@ function renderSite(r, i){
 
   const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
   const fires = r.pre_consent.length ? `<h3>Other pixels${preViol ? ` <span class="badge bad">${preViol} pre-consent</span>` : ''}</h3><ul>` + r.pre_consent.map(h =>
-      `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}">${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
+      `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='ungated' ? ' title="This tracker runs with no consent mechanism on the page at all. The finding is the missing CMP - the site-level condition - not a fault of this individual tag."' : ''}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
         <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Other pixels</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
   const pxBadge = px => !px.fired_pre && !px.fired_post
         ? '<span class="badge bad">not firing</span>'
         : px.fired_pre && !px.fired_post
-        ? '<span class="badge warn">pre-consent only</span>'
+        ? '<span class="badge warn" title="Fired before any consent interaction and never in a consent-gated window. On a page with a banner this pixel is jumping it; on a no-CMP page it simply runs unrestricted. Either way: working, but not consent-gated.">pre-consent only</span>'
         : '<span class="badge ok">' + (px.fired_pre ? 'pre + post' : 'post-consent') + '</span>';
   const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>Product pixels</h3>` + (prods.length ? prods.map(p => {
       const stateBadge = p.fired === 0 ? '<span class="badge bad">missing</span>'
