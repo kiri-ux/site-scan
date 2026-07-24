@@ -484,3 +484,9 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Native browser tooltips suppressed everywhere: any title attribute
   is migrated into the styled tip on first hover and removed, so only
   the Vici tooltip appears - including on elements added later.
+
+## v0.12.16
+- Loud Consent Mode stamp beside the Defaults line: green CORRECT
+  SETUP when everything starts denied, red INCORRECT SETUP naming-free
+  when defaults leak (the note below names keys), red NOT CONFIGURED
+  when GTM + CMP exist with no defaults at all.

@@ -120,12 +120,17 @@ function renderSite(r, i){
   // track before consent; no defaults at all (with GTM + a CMP) means
   // Consent Mode likely isn't configured.
   let cmNote = '';
+  let cmStamp = '';
   if (defaults.length) {
     const granted = defaults.filter(([k, v]) => v !== 'denied').map(([k]) => k);
+    cmStamp = granted.length
+      ? `<span class="cm-stamp bad"${tipAttr('defaults')}>&#10007; INCORRECT SETUP</span>`
+      : `<span class="cm-stamp ok"${tipAttr('defaults')}>&#10003; CORRECT SETUP</span>`;
     cmNote = granted.length
       ? `<div class="cm-note warn">&#9888; <b>${granted.join(', ')}</b> ${granted.length > 1 ? 'are' : 'is'} granted by default - Google tags can track before the visitor consents. The target setup starts every storage type <b>denied</b> and flips to granted on Accept (this is what the GTM consent procedure installs).</div>`
       : `<div class="cm-note ok">&#10003; Correct setup: every storage type starts <b>denied</b>, so Google tags run cookieless until the visitor accepts - exactly the Consent Mode configuration the GTM consent procedure installs. No consent work needed here.</div>`;
   } else if (r.gtm && r.gtm.found && r.cmps.length) {
+    cmStamp = `<span class="cm-stamp bad">&#10007; NOT CONFIGURED</span>`;
     cmNote = `<div class="cm-note warn">&#9888; No Consent Mode defaults detected in this page's GTM/gtag setup - Google tags likely run at full capability before consent even though a CMP is present. The GTM consent procedure installs denied-by-default settings.</div>`;
   }
 
@@ -190,7 +195,7 @@ function renderSite(r, i){
     </div>
     <div class="site-body">
       ${r.verdict === 'error' || r.mode !== 'full' ? `<div class="verdict ${meta.cls}">${(r.verdict_lines && r.verdict_lines.length ? r.verdict_lines : [r.verdict_detail || r.error || '']).map(l => `<div class="vline">${l}</div>`).join('')}</div>` : ''}
-      ${kvBits.length ? `<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px">${kvBits.join('')}</div>` : ''}
+      ${kvBits.length || cmStamp ? `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;align-items:center">${cmStamp}${kvBits.join('')}</div>` : ''}
       ${cmNote}
       <div class="detail">${cmpDetail}${rejFires}${dspDetail}${fires}${gated}</div>
     </div>
