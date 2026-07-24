@@ -391,3 +391,10 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Build-vs-market: removed the BARCK+ rationale bullet, added a link
   to the state-law check map Google Doc under the legal-gate decision,
   and added "free for all clients" as a bundle option.
+
+## v0.12.2
+- Save client button: persists the full client setup (name, partner,
+  conversion URLs, products, states) without scanning. Keeps the
+  existing schedule frequency for saved clients; new clients save with
+  the schedule off. Add to recurring continues to save with the chosen
+  frequency.

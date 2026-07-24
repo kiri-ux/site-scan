@@ -245,6 +245,7 @@
       <button class="btn-primary" id="go">Scan sites</button>
       <button class="btn-ghost" id="csv" disabled>Download CSV</button>
       <button class="btn-ghost" id="delete-all" disabled title="Permanently delete every scan in history">Delete all</button>
+      <button class="btn-ghost" id="save-client" title="Save this client's setup (name, partner, URLs, products, states) without running a scan. Keeps its current schedule; new clients save with the schedule off.">Save client</button>
       <span style="flex:1"></span>
       <select id="sched-freq" class="freq-select" title="Frequency for recurring scans">
         <option value="daily">Daily</option>
@@ -516,23 +517,34 @@ function editSite(i){
   showTab('scan');
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
-async function addSite(){
+async function upsertClient(frequency, btn){
   const url = $('site-url').value.trim();
   if (!url) { $('site-url').focus(); return; }
   if ($('conv-input').value.trim()){ addConvUrls($('conv-input').value); $('conv-input').value = ''; }
   const conv = dedupeUrls(url, convUrls).slice(1);
   const resp = await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({url, frequency: $('sched-freq').value,
+    body: JSON.stringify({url, frequency,
       products: selectedProducts, states: selectedStates, conversion_urls: conv,
       include_conversions: true, client_name: $('client-name').value.trim(),
       partner_name: $('partner-name').value.trim()})});
-  if (resp.ok){
-    const btn = $('sched-add');
+  if (resp.ok && btn){
     const label = btn.textContent;
     btn.textContent = 'Saved \u2713';
     setTimeout(() => { btn.textContent = label; }, 1800);
   }
   loadSchedule();
+}
+async function addSite(){
+  upsertClient($('sched-freq').value, $('sched-add'));
+}
+async function saveClient(){
+  // save the client's configuration without scanning and without
+  // changing its schedule: keep the existing frequency if this URL is
+  // already saved, otherwise store it with the schedule off
+  const url = $('site-url').value.trim();
+  if (!url) { $('site-url').focus(); return; }
+  const existing = (schedSites || []).find(s => normUrl(s.url) === normUrl(url));
+  upsertClient(existing ? existing.frequency : 'off', $('save-client'));
 }
 
 
@@ -757,6 +769,7 @@ function toCsv(){
 $('go').addEventListener('click', run);
 $('csv').addEventListener('click', toCsv);
 $('sched-add').addEventListener('click', addSite);
+$('save-client').addEventListener('click', saveClient);
 $('delete-all').addEventListener('click', async () => {
   if (!confirm('Permanently delete ALL scans from history? This cannot be undone.')) return;
   try {
