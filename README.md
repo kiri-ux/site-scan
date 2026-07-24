@@ -490,3 +490,28 @@ banner visibility, Consent Mode, or pre-consent fires.
   SETUP when everything starts denied, red INCORRECT SETUP naming-free
   when defaults leak (the note below names keys), red NOT CONFIGURED
   when GTM + CMP exist with no defaults at all.
+
+## v0.13.0 - configured-but-silent + client grouping
+- "Not seen" pixels now split three ways by checking the page source
+  AND the public GTM container JS (gtm.js?id=...) for the tag's code
+  fingerprints: "configured, not firing" (code present, no request -
+  a firing problem: trigger, consent block, or error), "not found"
+  (no trace anywhere - likely never installed), and "not seen" when
+  the code check couldn't run. CODE_HINTS per pixel in signatures.py.
+- History groups by client: one row per client with a version picker
+  inside the expand (pill per run, green/red status dot, newest first;
+  Share/Edit/Delete act on the selected version). "N runs" count in
+  the header.
+
+## v0.13.1
+- Product-pixel vocabulary unified with site posture: on no-CMP pages
+  a fired-but-ungated product pixel is labeled "ungated" (matching
+  Other pixels) with a banner-installation note; "pre-consent only"
+  now appears ONLY on pages where a banner exists to be jumped.
+
+## v0.13.2
+- No-CMP chains hide the cells that only mean something with a banner
+  present (Banner visible, Consent Mode default, Reject honored) - the
+  red CMP cell owns that story. Consent Mode stays when its defaults
+  are actually set (real signal even without a recognized CMP), and
+  error pages keep the full chain.

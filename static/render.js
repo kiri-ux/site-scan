@@ -1,6 +1,9 @@
 const TIPS = {
+  'configured-silent': 'This tag\u2019s code was found in the page source or the GTM container, but no matching request fired. That is a FIRING problem - a trigger condition, a consent block, or a script error - not a missing tag. Fixable, and worth a GTM Preview session.',
+  'not found': 'No matching request fired AND no trace of this tag was found in the page source or the GTM container JS. It was most likely never installed on this page - a placement conversation, not a debugging one.',
   'not seen': 'No request matching this pixel was observed on this page, before or after consent. From outside we cannot tell not-installed from blocked - it may also fire only on specific pages or events (a thank-you page, a form submit). The GTM config audit is what settles it.',
-  'pre-consent only': 'Fired before any consent interaction and never in a consent-gated window. On a page with a banner this pixel is jumping it; on a no-CMP page it simply runs unrestricted. Either way: working, but not consent-gated.',
+  'pre-consent only': 'This page HAS a consent banner, and this pixel fired before any consent interaction - it is jumping the banner. Working, but not consent-gated.',
+  'ungated-pixel': 'This pixel runs unrestricted because the page has no consent mechanism at all. It is working - the finding is the missing CMP (the site-level condition), and once a banner is installed this pixel should be consent-gated behind it.',
   'pre + post': 'Fired both before AND after Accept. The post-consent fire is fine - the pre-consent fire is the problem half, since it ran before the visitor agreed.',
   'post-consent': 'Fired only after Accept was clicked - correctly consent-gated. This is the target state for every tracking pixel.',
   'firing': 'Every expected pixel for this product was observed on this page.',
@@ -91,13 +94,18 @@ function chainFor(r, opts){
   const scLabel = scFails.length ? `${scFails.length} failing`
                 : (r.state_checks||[]).length ? 'Passing' : 'Untested';
   const fmt = v => v === true ? 'Yes' : v === false ? 'No' : 'Unknown';
+  // Without a CMP, the banner/consent-mode/reject cells are pure noise
+  // (Unknown / No / Untested) - hide them and let the red CMP cell own
+  // the story. Exception: Consent Mode defaults set to denied is real
+  // signal even without a recognized CMP, so a true value stays.
+  const noCmp = r.ok && !r.cmps.length;
   return `<div class="chain">
       ${chainLink('CMP', r.cmps.length ? cmpNames : (r.ok ? 'None found' : 'Unknown'), cmpState)}
-      ${chainLink('Banner visible', fmt(r.banner_visible), bannerState)}
-      ${chainLink('Consent Mode default', fmt(r.consent_mode_default), cmState)}
+      ${noCmp ? '' : chainLink('Banner visible', fmt(r.banner_visible), bannerState)}
+      ${noCmp && r.consent_mode_default !== true ? '' : chainLink('Consent Mode default', fmt(r.consent_mode_default), cmState)}
       ${chainLink('Pre-consent trackers', fireLabel, fireState)}
       ${chainLink('Product pixels', prodLabel, prodState)}
-      ${chainLink('Reject honored', rejLabel, rejState)}
+      ${noCmp ? '' : chainLink('Reject honored', rejLabel, rejState)}
       ${withStates && (r.states||[]).length ? chainLink('State checks', scLabel, scState) : ''}
     </div>`;
 }
@@ -144,10 +152,17 @@ function renderSite(r, i){
         <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Other pixels</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
+  const hasCmp = (r.cmps || []).length > 0;
   const pxBadge = px => !px.fired_pre && !px.fired_post
-        ? `<span class="badge bad"${tipAttr('not seen')}>not seen</span>`
+        ? (px.configured === true
+            ? `<span class="badge warn"${tipAttr('configured-silent')}>configured, not firing</span>`
+            : px.configured === false
+            ? `<span class="badge bad"${tipAttr('not found')}>not found</span>`
+            : `<span class="badge bad"${tipAttr('not seen')}>not seen</span>`)
         : px.fired_pre && !px.fired_post
-        ? `<span class="badge warn"${tipAttr('pre-consent only')}>pre-consent only</span>`
+        ? (hasCmp
+            ? `<span class="badge warn"${tipAttr('pre-consent only')}>pre-consent only</span>`
+            : `<span class="badge warn"${tipAttr('ungated-pixel')}>ungated</span>`)
         : (px.fired_pre ? `<span class="badge ok"${tipAttr('pre + post')}>pre + post</span>` : `<span class="badge ok"${tipAttr('post-consent')}>post-consent</span>`);
   const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>Product pixels</h3>` + (prods.length ? prods.map(p => {
       const stateBadge = p.fired === 0 ? `<span class="badge bad"${tipAttr('missing')}>missing</span>`
@@ -156,7 +171,7 @@ function renderSite(r, i){
       const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected} firing</span>` : '';
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
-        `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ' <span class="evidence">working, but should be consent-gated</span>' : ''}${px.macro_warning ? ' <span class="macro-warn">pixel URL contains unreplaced macros like [ORDER] - the template was pasted without filling values, so conversion data will be blank</span>' : ''}
+        `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - will need consent-gating once a banner is installed'}</span>` : ''}${px.macro_warning ? ' <span class="macro-warn">pixel URL contains unreplaced macros like [ORDER] - the template was pasted without filling values, so conversion data will be blank</span>' : ''}
          ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></div>`;
     }).join('')
     : `<p class="kv">${r.accept_clicked ? 'No product pixels observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';

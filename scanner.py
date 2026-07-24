@@ -21,12 +21,12 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.12.12"
+SCANNER_REV = "0.13.0"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
                           LAST_REVIEWED, REVIEW_INTERVAL_DAYS)
-from signatures import (CMP_SIGNATURES, TRACKER_ENDPOINTS, PRODUCT_PIXELS,
+from signatures import (CMP_SIGNATURES, TRACKER_ENDPOINTS, PRODUCT_PIXELS, CODE_HINTS,
                         ACCEPT_SELECTORS, GENERIC_ACCEPT_TEXT,
                         STRICT_ACCEPT_TEXT, REJECT_SELECTORS,
                         STRICT_REJECT_TEXT)
@@ -690,6 +690,23 @@ def _full_scan_impl(browser, url, products=None, states=None,
 
     # Product pixels: per selected product (or ALL products in detect-any
     # mode), which expected sub-pixels fired, pre vs post consent.
+    # For pixels with NO observed request, check the page source and the
+    # (publicly fetchable) GTM container JS for the vendor's fingerprints
+    # to split "not seen" into "configured but silent" (firing problem)
+    # vs "not found anywhere" (likely never installed).
+    code_corpus = html.lower()
+    for cid in (result.get("gtm", {}).get("container_ids") or [])[:3]:
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                f"https://www.googletagmanager.com/gtm.js?id={cid}",
+                headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                code_corpus += "\n" + resp.read(2_000_000).decode(
+                    "utf-8", "replace").lower()
+        except Exception:
+            pass  # container fetch is best-effort evidence only
+
     selected = products if products else list(PRODUCT_PIXELS.keys())
     detect_any = not products
     for prod in selected:
@@ -700,10 +717,15 @@ def _full_scan_impl(browser, url, products=None, states=None,
             post_hit = next((u for u in post_urls
                              if any(p in u for p in px["patterns"])), None)
             hit_url = (post_hit or pre_hit) or ""
+            configured = None
+            if not pre_hit and not post_hit:
+                hints = list(px["patterns"]) + CODE_HINTS.get(px["name"], [])
+                configured = any(h.lower() in code_corpus for h in hints)
             pixels.append({
                 "name": px["name"],
                 "fired_pre": bool(pre_hit),
                 "fired_post": bool(post_hit),
+                "configured": configured,
                 "sample_url": hit_url[:220],
                 # Unreplaced trafficking macros like [ORDER] or {orderid}
                 # mean the template was pasted without filling values.

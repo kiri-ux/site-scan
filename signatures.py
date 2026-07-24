@@ -192,6 +192,27 @@ REJECT_SELECTORS = {
     "Axeptio": ["#axeptio_btn_refuseAll"],
 }
 
+# Code fingerprints for "configured but silent" detection: substrings a
+# tag's template leaves in page source or GTM container JS even when the
+# tag never fires. Conservative on purpose - endpoints from patterns are
+# always checked too.
+CODE_HINTS = {
+    "Meta Pixel": ["fbq(", "fbevents.js", "facebook pixel"],
+    "Amazon Ad Tag": ["amzn.js", "amazon-adsystem"],
+    "Google Ads": ["aw-", "googleadservices"],
+    "Google Analytics": ["gtag(", "google-analytics"],
+    "Google Analytics 4": ["gtag(", "google-analytics"],
+    "LinkedIn Insight": ["_linkedin_partner_id", "snap.licdn.com"],
+    "TikTok Pixel": ["ttq.load", "analytics.tiktok.com"],
+    "xAd/GroundTruth": ["bidagent.xad.com"],
+    "Beeswax conversion": ["bidr.io"],
+    "Beeswax segment": ["bidr.io"],
+    "Yahoo": ["sp.analytics.yahoo.com", "dot.gif"],
+    "Floodlight": ["fls.doubleclick", "ddm/activity"],
+    "The Trade Desk": ["adsrvr.org", "ttdUniversalPixel"],
+    "IDX tag": ["idx"],
+}
+
 STRICT_REJECT_TEXT = (r"^\s*(reject( all)?( cookies)?|decline( all)?|"
                       r"disagree|refuse( all)?|deny( all)?|"
                       r"deny targeting cookies|"
