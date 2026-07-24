@@ -21,6 +21,9 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
+SCANNER_REV = "0.10.7"
+print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
+
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
                           LAST_REVIEWED, REVIEW_INTERVAL_DAYS)
 from signatures import (CMP_SIGNATURES, TRACKER_ENDPOINTS, PRODUCT_PIXELS,

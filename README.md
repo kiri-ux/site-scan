@@ -281,3 +281,7 @@ banner visibility, Consent Mode, or pre-consent fires.
   clients. Conversion rows show "See main site" in the Reject cell.
   Cron applies the same split. Override per request with site_checks.
 - State target chips ordered alphabetically.
+
+## v0.10.7
+- Scanner prints "[scanner] rev X loaded" at boot so Render logs prove
+  which scanner.py is actually deployed (catches partial uploads).
