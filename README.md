@@ -473,3 +473,9 @@ banner visibility, Consent Mode, or pre-consent fires.
   after-reject, and the head badges), plus explainers on the Consent
   Mode Defaults line and CMP identification evidence. "not firing"
   renamed "not seen" - the check-based accurate claim.
+
+## v0.12.14
+- Consent Mode defaults line now carries a verdict note: green when
+  every storage type starts denied (the target setup - no consent work
+  needed), amber naming the granted keys when defaults leak, and amber
+  when GTM + a CMP are present but no defaults exist at all.
