@@ -25,11 +25,26 @@ import csv
 import io
 import os
 import sys
+from datetime import datetime, timezone
 
+import db
 from scanner import scan_site
 
 
 def load_sites():
+    # Prefer the UI-managed schedule when a database is connected.
+    if db.enabled():
+        try:
+            monday = datetime.now(timezone.utc).weekday() == 0
+            due = [s["url"] for s in db.list_sites()
+                   if s["frequency"] == "daily"
+                   or (s["frequency"] == "weekly" and monday)]
+            if due:
+                return due
+            print("Schedule table has no sites due today.")
+        except Exception as e:
+            print(f"Could not read schedule from DB ({e}); "
+                  f"falling back to SITES/sites.txt.")
     raw = os.environ.get("SITES", "").strip()
     if not raw and os.path.exists("sites.txt"):
         raw = open("sites.txt").read()
@@ -123,6 +138,11 @@ def main():
     for s in sites:
         r = scan_site(s, prefer_full=True)
         results.append(r)
+        if r["ok"]:
+            try:
+                db.save_scan(r)
+            except Exception as e:
+                print(f"  (could not save to history: {e})")
         print(f"  [{r['verdict']}] {r['url']}")
 
     buf = io.StringIO()

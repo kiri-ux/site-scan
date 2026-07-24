@@ -59,6 +59,12 @@
   .site-head .cmp-name{font-size:13px;color:var(--muted);white-space:nowrap}
   .caret{color:var(--muted);transition:transform .2s;font-size:12px}
   .scanned{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+  .freq-select{border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:14px 'Barlow',sans-serif;background:#FCFCFB;color:var(--ink)}
+  .sched-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .sched-row:last-child{border-bottom:none}
+  .sched-row .surl{flex:1;word-break:break-all}
+  .sched-row .rm{background:none;border:none;color:var(--bad);font-size:13px;font-weight:600;cursor:pointer;padding:4px 8px}
+  .sched-empty{color:var(--muted);font-size:13.5px;padding:6px 0}
   .site.open .caret{transform:rotate(90deg)}
 
   .site-body{display:none;border-top:1px solid var(--line);padding:18px}
@@ -123,6 +129,20 @@
     </div>
   </section>
 
+  <section class="panel" id="sched-panel" style="display:none">
+    <h2>Recurring scans</h2>
+    <p class="hint" style="margin:0 0 12px">These sites run automatically on the scheduled cron job. Daily sites run every day; weekly sites run Mondays; off pauses a site without removing it.</p>
+    <div class="row" style="margin:0 0 12px">
+      <input id="sched-url" type="text" placeholder="clientsite.com" style="flex:1;min-width:220px;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font:14px 'Barlow',sans-serif;background:#FCFCFB">
+      <select id="sched-freq" class="freq-select">
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+      </select>
+      <button class="btn-primary" id="sched-add">Add site</button>
+    </div>
+    <div id="sched-list"></div>
+  </section>
+
   <div class="results-tools" id="results-tools"></div>
   <section id="results"></section>
   <p class="empty" id="empty">Results appear here. Each site gets a consent chain: CMP &rarr; banner &rarr; Consent Mode &rarr; pre-consent fires.</p>
@@ -133,15 +153,76 @@ const $ = id => document.getElementById(id);
 const STORE_KEY = 'consent-scan-results-v1';
 let results = [];
 
+let dbEnabled = false;
+
 function saveResults(){
+  if (dbEnabled) return; // server history is the source of truth
   try { localStorage.setItem(STORE_KEY, JSON.stringify(results.slice(-200))); }
   catch(e){ /* storage full or blocked - results just won't persist */ }
 }
-function restoreResults(){
+async function restoreResults(){
+  try {
+    const resp = await fetch('/history');
+    const d = await resp.json();
+    dbEnabled = d.enabled;
+    if (d.enabled) {
+      results = (d.results || []).map(r => {
+        if (r.scanned_at_iso) {
+          r.scanned_local = new Date(r.scanned_at_iso).toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
+        }
+        return r;
+      });
+      render();
+      return;
+    }
+  } catch(e){ /* fall through to localStorage */ }
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) { results = JSON.parse(raw) || []; render(); }
   } catch(e){ results = []; }
+}
+
+// ---- recurring scan schedule ----
+async function loadSchedule(){
+  try {
+    const d = await (await fetch('/sites')).json();
+    if (!d.enabled) return; // no DB - keep panel hidden
+    $('sched-panel').style.display = 'block';
+    const list = $('sched-list');
+    if (!d.sites.length){
+      list.innerHTML = '<div class="sched-empty">No sites scheduled yet. Add a client site above to start recurring scans.</div>';
+      return;
+    }
+    list.innerHTML = d.sites.map(s => `
+      <div class="sched-row">
+        <span class="surl">${s.url}</span>
+        <select class="freq-select" onchange="setFreq('${s.url.replace(/'/g,"\\'")}', this.value)">
+          <option value="daily" ${s.frequency==='daily'?'selected':''}>Daily</option>
+          <option value="weekly" ${s.frequency==='weekly'?'selected':''}>Weekly</option>
+          <option value="off" ${s.frequency==='off'?'selected':''}>Off</option>
+        </select>
+        <button class="rm" onclick="removeSite('${s.url.replace(/'/g,"\\'")}')">Remove</button>
+      </div>`).join('');
+  } catch(e){ /* panel stays hidden */ }
+}
+async function setFreq(url, frequency){
+  await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({url, frequency})});
+  loadSchedule();
+}
+async function removeSite(url){
+  if (!confirm(`Remove ${url} from recurring scans?`)) return;
+  await fetch('/sites/delete', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({url})});
+  loadSchedule();
+}
+async function addSite(){
+  const url = $('sched-url').value.trim();
+  if (!url) return;
+  const resp = await fetch('/sites', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({url, frequency: $('sched-freq').value})});
+  if (resp.ok) $('sched-url').value = '';
+  loadSchedule();
 }
 
 const VERDICT_META = {
@@ -309,12 +390,19 @@ function toCsv(){
 $('go').addEventListener('click', run);
 $('csv').addEventListener('click', toCsv);
 $('clear').addEventListener('click', () => {
+  if (dbEnabled) {
+    if (!confirm('Hide results from this view? (Server history is kept - refresh to reload it.)')) return;
+    results = []; render(); return;
+  }
   if (!confirm('Clear all saved scan results?')) return;
   results = [];
   localStorage.removeItem(STORE_KEY);
   render();
 });
+$('sched-add').addEventListener('click', addSite);
+$('sched-url').addEventListener('keydown', e => { if (e.key === 'Enter') addSite(); });
 restoreResults();
+loadSchedule();
 </script>
 </body>
 </html>

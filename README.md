@@ -71,3 +71,18 @@ banner visibility, Consent Mode, or pre-consent fires.
   AWS_SECRET_ACCESS_KEY to receive the CSV report. ALERT_ONLY=1 emails
   only when a site is flagged (no CMP, pre-consent fires, ungated DSP
   pixels, or scan errors) - silence means all clean.
+
+## v0.4.0 - Postgres history, in-UI schedule, sturdier accept-click
+- Accept-click now waits up to 6s for the banner, searches EVERY frame
+  (iframe banners like TrustArc/Quantcast), then falls back to loose
+  button-text matching and finally strictly-labeled links.
+- With DATABASE_URL set (Render Postgres, Internal URL, on BOTH the web
+  service and the cron job): scan history is stored server-side and
+  loads for everyone on every machine; the Recurring Scans panel appears
+  in the UI to add/remove sites and set frequency (daily / weekly /
+  off). Weekly sites run Mondays. The cron job reads this schedule;
+  without a DB it falls back to SITES env or sites.txt.
+- Without DATABASE_URL everything still works; results persist per
+  browser via localStorage and the schedule panel stays hidden.
+- Cron setup unchanged: New > Cron Job, same repo/Dockerfile, Docker
+  command "python batch_scan.py", schedule "0 11 * * *".

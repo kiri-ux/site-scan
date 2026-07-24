@@ -141,6 +141,51 @@ CMP_SIGNATURES = [
     },
 ]
 
+# Accept-button selectors per CMP, used to simulate a user clicking
+# "Accept" so post-consent pixel firing can be verified. Playwright CSS
+# selectors pierce open shadow DOM (needed for Usercentrics).
+ACCEPT_SELECTORS = {
+    "OneTrust": ["#onetrust-accept-btn-handler"],
+    "Cookiebot": ["#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+                  "#CybotCookiebotDialogBodyButtonAccept"],
+    "Usercentrics": ["[data-testid='uc-accept-all-button']"],
+    "iubenda": [".iubenda-cs-accept-btn"],
+    "Osano": [".osano-cm-accept-all", ".osano-cm-accept"],
+    "CookieYes": [".cky-btn-accept"],
+    "Termly": ["[data-tid='banner-accept']"],
+    "Ketch": ["#lanyard_root button[class*='confirm']"],
+    "Didomi": ["#didomi-notice-agree-button"],
+    "TrustArc": ["#truste-consent-button"],
+    "Complianz (WordPress)": [".cmplz-accept"],
+    "CookieLawInfo / WebToffee (WordPress)": [
+        ".cli_action_button[data-cli_action='accept_all']",
+        "#cookie_action_close_header"],
+    "Quantcast Choice": [".qc-cmp2-summary-buttons button[mode='primary']"],
+    "Axeptio": ["#axeptio_btn_acceptAll"],
+}
+
+# Generic fallback when no CMP-specific accept selector matches.
+GENERIC_ACCEPT_TEXT = r"accept all|allow all|accept cookies|accept|agree|allow|got it"
+# Stricter anchored pattern for links/[role=button] - avoids clicking
+# navigation like "Accept payments" or a terms link.
+STRICT_ACCEPT_TEXT = (r"^\s*(accept( all)?( cookies)?|i accept|agree|"
+                      r"allow( all)?( cookies)?|got it|ok(ay)?)\s*$")
+
+# Vici DSP / ad-serving pixel endpoints. Detection is vendor-level ("did
+# the BARCK+ pixels fire"), not per-tag-ID. `patterns` are substring
+# matches against request URLs, so one domain covers conversion, segment,
+# and match pixels alike. Rename labels freely to match product naming.
+DSP_ENDPOINTS = [
+    {"vendor": "BARCK+ (Beeswax)",
+     "patterns": ["bidr.io"]},                     # cnv.event.prod / segment.prod / match.prod
+    {"vendor": "The Trade Desk",
+     "patterns": ["adsrvr.org"]},                  # insight.adsrvr.org, js.adsrvr.org
+    {"vendor": "Yahoo DSP",
+     "patterns": ["sp.analytics.yahoo.com"]},
+    {"vendor": "Google Floodlight (CM360/DV360)",
+     "patterns": ["ad.doubleclick.net/ddm/activity", "fls.doubleclick.net"]},
+]
+
 # Well-known ad/analytics pixel endpoints. `vendor` is the display name;
 # `google` flags endpoints participating in Google Consent Mode, whose
 # cookieless pings can legitimately fire pre-consent when Consent Mode

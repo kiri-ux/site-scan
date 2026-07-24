@@ -21,7 +21,9 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-from signatures import CMP_SIGNATURES, TRACKER_ENDPOINTS
+from signatures import (CMP_SIGNATURES, TRACKER_ENDPOINTS, DSP_ENDPOINTS,
+                        ACCEPT_SELECTORS, GENERIC_ACCEPT_TEXT,
+                        STRICT_ACCEPT_TEXT)
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
@@ -69,6 +71,62 @@ def _classify_tracker(url):
     return None
 
 
+def _try_accept(page, cmp_names, wait_seconds=6):
+    """Click the consent banner's Accept control. Returns the click
+    timestamp, or None if nothing clickable was found.
+
+    Strategy, in order:
+      1. CMP-specific selectors, retried for up to `wait_seconds` across
+         EVERY frame (banners often render late, and TrustArc/Quantcast
+         and others render inside an iframe).
+      2. Any visible <button> whose text loosely matches accept language.
+      3. Links / [role=button] with STRICTLY anchored accept text - last
+         because clicking a look-alike link can navigate away.
+    Playwright selectors pierce open shadow DOM (Usercentrics) natively.
+    """
+    selectors = [sel for name in cmp_names
+                 for sel in ACCEPT_SELECTORS.get(name, [])]
+
+    deadline = time.time() + wait_seconds
+    while time.time() < deadline:
+        for frame in page.frames:
+            for sel in selectors:
+                try:
+                    el = frame.query_selector(sel)
+                    if el and el.is_visible():
+                        t = time.time()
+                        el.click(timeout=2000)
+                        return t
+                except Exception:
+                    pass
+        time.sleep(0.5)
+
+    loose = re.compile(GENERIC_ACCEPT_TEXT, re.I)
+    strict = re.compile(STRICT_ACCEPT_TEXT, re.I)
+    for pattern, css in ((loose, "button"),
+                         (strict, "a, [role='button'], input[type='button'], "
+                                  "input[type='submit']")):
+        for frame in page.frames:
+            try:
+                loc = frame.locator(css).filter(has_text=pattern)
+                for i in range(min(loc.count(), 8)):
+                    item = loc.nth(i)
+                    try:
+                        txt = (item.inner_text(timeout=500) or "").strip()
+                        if len(txt) > 40 or not item.is_visible():
+                            continue
+                        if pattern is strict and not strict.search(txt):
+                            continue
+                        t = time.time()
+                        item.click(timeout=2000)
+                        return t
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+    return None
+
+
 def _gcs_denied(url):
     """True if a Google request carries a Consent Mode gcs= param in a
     denied/partial state (i.e. it's a cookieless modeling ping)."""
@@ -93,6 +151,9 @@ def _empty_result(url):
         "consent_mode_default": "unknown", # true / false / "unknown"
         "consent_defaults": {},            # e.g. {"ad_storage": "denied"}
         "pre_consent": [],          # [{vendor, url, severity, note}]
+        "accept_clicked": False,    # did the scan simulate clicking Accept
+        "post_consent": [],         # tracker vendors that fired only after accept
+        "dsp_pixels": [],           # [{vendor, fired_pre, fired_post, sample_url}]
         "verdict": None,
         "verdict_detail": None,
     }
@@ -146,7 +207,7 @@ def full_scan(url):
 
     result = _empty_result(url)
     result["mode"] = "full"
-    requests_seen = []
+    requests_seen = []  # (timestamp, url)
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(
@@ -154,7 +215,8 @@ def full_scan(url):
         context = browser.new_context(user_agent=UA, locale="en-US",
                                       viewport={"width": 1366, "height": 900})
         page = context.new_page()
-        page.on("request", lambda req: requests_seen.append(req.url))
+        page.on("request",
+                lambda req: requests_seen.append((time.time(), req.url)))
 
         try:
             page.goto(url, wait_until="domcontentloaded",
@@ -179,7 +241,7 @@ def full_scan(url):
             evidence_by_cmp.setdefault(name, []).extend(
                 f"script/domain: {m}" for m in matched)
 
-        net_corpus = "\n".join(requests_seen)
+        net_corpus = "\n".join(u for _, u in requests_seen)
         for name, matched in _match_domains(net_corpus).items():
             evidence_by_cmp.setdefault(name, []).extend(
                 f"network: {m}" for m in matched)
@@ -271,19 +333,34 @@ def full_scan(url):
         except Exception:
             result["consent_mode_default"] = "unknown"
 
+        # --- simulate clicking Accept, then watch what fires
+        click_time = None
+        if result["cmps"]:
+            click_time = _try_accept(page, [c["name"] for c in result["cmps"]])
+            result["accept_clicked"] = click_time is not None
+        if result["accept_clicked"]:
+            try:
+                page.wait_for_load_state("networkidle", timeout=6000)
+            except Exception:
+                pass
+            time.sleep(SETTLE_SECONDS)  # let consent-gated tags fire
+
         browser.close()
 
-    # --- pre-consent tracker classification (no banner interaction happened,
-    #     so every hit below fired before any consent was given)
+    # --- phase split: everything before the Accept click is pre-consent;
+    #     everything after is post-consent. No click => all pre-consent.
+    pre_urls = [u for t, u in requests_seen
+                if click_time is None or t < click_time]
+    post_urls = [u for t, u in requests_seen
+                 if click_time is not None and t >= click_time]
+
+    # pre-consent tracker classification
     seen_vendors = set()
-    for req_url in requests_seen:
+    for req_url in pre_urls:
         tracker = _classify_tracker(req_url)
-        if not tracker:
+        if not tracker or tracker["vendor"] in seen_vendors:
             continue
-        key = (tracker["vendor"],)
-        if key in seen_vendors:
-            continue
-        seen_vendors.add(key)
+        seen_vendors.add(tracker["vendor"])
 
         if tracker["google"] and _gcs_denied(req_url):
             severity, note = "info", ("Consent Mode cookieless ping in a "
@@ -304,6 +381,30 @@ def full_scan(url):
 
     result["pre_consent"].sort(
         key=lambda h: {"violation": 0, "warn": 1, "info": 2}[h["severity"]])
+
+    # trackers that fired ONLY after Accept = correctly gated + working
+    post_vendors = {}
+    for req_url in post_urls:
+        tracker = _classify_tracker(req_url)
+        if tracker and tracker["vendor"] not in post_vendors:
+            post_vendors[tracker["vendor"]] = req_url
+    result["post_consent"] = [
+        {"vendor": v, "url": u[:220]}
+        for v, u in sorted(post_vendors.items()) if v not in seen_vendors]
+
+    # DSP pixels: vendor-level "did it fire at all", pre vs post
+    for dsp in DSP_ENDPOINTS:
+        pre_hit = next((u for u in pre_urls
+                        if any(p in u for p in dsp["patterns"])), None)
+        post_hit = next((u for u in post_urls
+                         if any(p in u for p in dsp["patterns"])), None)
+        if pre_hit or post_hit:
+            result["dsp_pixels"].append({
+                "vendor": dsp["vendor"],
+                "fired_pre": bool(pre_hit),
+                "fired_post": bool(post_hit),
+                "sample_url": (post_hit or pre_hit)[:220],
+            })
     return result
 
 
@@ -340,6 +441,9 @@ def _apply_verdict(r):
         ev = next((c["gtm_event"] for c in r["cmps"] if c["gtm_event"]), None)
         if ev:
             r["verdict_detail"] += f" GTM trigger event: {ev}"
+    if r.get("dsp_pixels"):
+        names = ", ".join(d["vendor"] for d in r["dsp_pixels"])
+        r["verdict_detail"] += f" DSP pixels detected: {names}."
     return r
 
 
