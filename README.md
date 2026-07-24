@@ -421,3 +421,8 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Hover tooltips on the "pre-consent only" and "ungated" badges
   explaining what each means and how they differ.
 - Run headers show the partner name plain (no "via").
+
+## v0.12.6
+- Run-header Share / Edit / Delete are compact icon buttons (tooltips
+  and aria-labels preserved; Share flashes a checkmark when the link
+  copies).
