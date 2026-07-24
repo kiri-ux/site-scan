@@ -448,3 +448,12 @@ banner visibility, Consent Mode, or pre-consent fires.
   legacy UA collect endpoints). Pairs with the SEO quote tool line -
   monitoring proves the analytics client reporting depends on is
   actually firing and consent-gated.
+
+## v0.12.11
+- Unknown CMPs are now flagged: when no signature matches, a
+  conservative heuristic (anchored element with consent text plus an
+  accept/reject button, or IAB __tcfapi/__uspapi/__gpp APIs) reports
+  "Unrecognized consent banner" with evidence, so a mechanism is never
+  reported as "None found" just because the vendor is new to us.
+- Run-header timestamp is a clock icon; the full "most recent pull"
+  timestamp shows on hover. Header icons sit tighter.
