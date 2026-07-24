@@ -479,3 +479,8 @@ banner visibility, Consent Mode, or pre-consent fires.
   every storage type starts denied (the target setup - no consent work
   needed), amber naming the granted keys when defaults leak, and amber
   when GTM + a CMP are present but no defaults exist at all.
+
+## v0.12.15
+- Native browser tooltips suppressed everywhere: any title attribute
+  is migrated into the styled tip on first hover and removed, so only
+  the Vici tooltip appears - including on elements added later.

@@ -151,6 +151,13 @@ const RUN_ID = {{ run_id | tojson }};
   }
   function hide(){ cur = null; box.classList.remove('on'); }
   document.addEventListener('mouseover', e => {
+    // absorb native title attributes: migrate to styled tips on first
+    // hover so Chrome's built-in tooltip never fires
+    const titled = e.target.closest('[title]');
+    if (titled) {
+      if (!titled.getAttribute('data-tip')) titled.setAttribute('data-tip', titled.getAttribute('title'));
+      titled.removeAttribute('title');
+    }
     const el = e.target.closest('[data-tip]');
     if (el) show(el); else if (cur) hide();
   });
