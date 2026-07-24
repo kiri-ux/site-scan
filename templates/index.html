@@ -549,13 +549,13 @@ async function run(){
     freshCount++; doneCount++;
     $('progress-count').textContent = `${doneCount} / ${urls.length}`;
     $('bar-fill').style.width = `${(doneCount / urls.length) * 100}%`;
-    saveResults();
-    render();
+    try { saveResults(); } catch(e){ console.error('saveResults failed', e); }
+    try { render(); } catch(e){ console.error('render failed', e); }
   };
   async function scanWorker(){
     while (nextIdx < urls.length){
       const i = nextIdx++;
-      $('progress-label').textContent = `Scanning ${urls[i]}`;
+      try { $('progress-label').textContent = `Scanning ${urls[i]}`; } catch(e){}
       try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 150000);
@@ -571,11 +571,14 @@ async function run(){
         r.scanned_local = stamp();
         insertResult(r);
       } catch (e) {
+        console.error('scan request failed for', urls[i], e);
+        try {
         insertResult({url: urls[i], ok:false, mode:'basic', verdict:'error',
           run_id: runId, client_name: clientName, scanned_local: stamp(),
           verdict_detail:'Request failed or timed out - if a deploy was in progress, wait for it to finish and re-run this page.',
           cmps:[], pre_consent:[], gtm:{found:false,container_ids:[]},
           banner_visible:'unknown', consent_mode_default:'unknown', consent_defaults:{}});
+        } catch(e2){ console.error('error-card insert failed', e2); }
       }
     }
   }

@@ -75,6 +75,7 @@ function chainFor(r){
 }
 
 function renderSite(r, i){
+  const meta = VERDICT_META[r.verdict] || VERDICT_META.error;
   const cmpNames = r.cmps.map(c => c.name).join(', ');
   const prods = r.products || [];
   const chain = chainFor(r);
@@ -87,7 +88,7 @@ function renderSite(r, i){
   if (defaults.length) kvBits.push(`<span class="kv">Defaults: <b>${defaults.map(([k,v])=>`${k}=${v}`).join(', ')}</b></span>`);
 
   const cmpDetail = r.cmps.length ? `<h3>CMP evidence</h3><ul>` + r.cmps.map(c =>
-      `<li><div><b>${c.name}</b> <span class="evidence">${c.evidence.join(' &middot; ')}</span>
+      `<li><div><b>${c.name}</b> <span class="evidence">${(c.evidence||[]).join(' &middot; ')}</span>
         ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}</div></li>`).join('') + `</ul>` : '';
 
   const fires = r.pre_consent.length ? `<h3>Requests before consent</h3><ul>` + r.pre_consent.map(h =>

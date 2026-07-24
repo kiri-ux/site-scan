@@ -312,3 +312,17 @@ banner visibility, Consent Mode, or pre-consent fires.
   dropped site_checks, so a retried main-site scan lost its state/GPC
   passes.
 - Verdict prints show ok/error class; recycling logs itself.
+
+## v0.10.11 - THE 4/11 stall: renderSite crash (client-side)
+- Root cause of every 4/11 stall since build 0.9.4: the share-page
+  refactor cut renderSite's `meta` definition while the verdict box
+  still used meta.cls, so EVERY render threw ReferenceError. Each scan
+  worker inserted a success (+1), render threw, the catch inserted an
+  error card (+1), render threw again inside the catch, and the worker
+  died - two workers, exactly 4/11, label frozen on the last-started
+  URL, requests 3+ never sent. The server was never at fault.
+- Fixed the definition, hardened cmp-evidence rendering, and armored
+  the scan loop: render/save failures now log to the browser console
+  and can never kill a worker.
+- All render paths (full, error, CMP with and without evidence) are
+  executed in CI-style checks now, not just template-string-checked.
