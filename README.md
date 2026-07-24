@@ -386,3 +386,8 @@ banner visibility, Consent Mode, or pre-consent fires.
   the Build-vs-market tab. /logout ends the session. Optionally set
   SECRET_KEY to keep sessions valid across password changes.
 - No password set = no gate (unchanged behavior).
+
+## v0.12.1
+- Build-vs-market: removed the BARCK+ rationale bullet, added a link
+  to the state-law check map Google Doc under the legal-gate decision,
+  and added "free for all clients" as a bundle option.
