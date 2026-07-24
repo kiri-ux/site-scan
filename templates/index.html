@@ -74,6 +74,10 @@
   .chip.on{background:var(--atlas);border-color:var(--atlas);color:#fff}
   .chip:focus-visible{outline:2px solid var(--velocity);outline-offset:2px}
   .prod-tags{font-size:12px;color:var(--muted)}
+  .pstat{font-size:12.5px;font-weight:600;white-space:nowrap;border-radius:4px;padding:2px 7px}
+  .pstat.ok{background:var(--ok-bg);color:var(--ok)}
+  .pstat.warn{background:var(--warn-bg);color:var(--warn)}
+  .pstat.bad{background:var(--bad-bg);color:var(--bad)}
   .freq-select{border:1px solid var(--line);border-radius:8px;padding:9px 12px;font:14px 'Barlow',sans-serif;background:#FCFCFB;color:var(--ink)}
   .sched-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px}
   .sched-row:last-child{border-bottom:none}
@@ -376,7 +380,7 @@ function renderSite(r, i){
                   : prods.length ? 'pass' : 'mid';
   const prodLabel = r.mode !== 'full' ? 'Unknown'
                   : !prods.length ? (r.accept_clicked ? 'None seen' : 'Unverified')
-                  : prods.map(p => `${p.product} ${p.fired}/${p.expected}`).join(', ');
+                  : prods.map(p => p.expected > 1 ? `${p.product} ${p.fired}/${p.expected}` : p.product).join(', ');
 
   const fmt = v => v === true ? 'Yes' : v === false ? 'No' : 'Unknown';
 
@@ -410,11 +414,11 @@ function renderSite(r, i){
         ? '<span class="badge warn">pre-consent only</span>'
         : '<span class="badge ok">' + (px.fired_pre ? 'pre + post' : 'post-consent') + '</span>';
   const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>Product pixels</h3>` + (prods.length ? prods.map(p => {
-      const anyMacro = p.pixels.some(px => px.macro_warning);
       const stateBadge = p.fired === 0 ? '<span class="badge bad">missing</span>'
                        : p.fired < p.expected ? '<span class="badge warn">partial</span>'
                        : '<span class="badge ok">firing</span>';
-      return `<details class="prod"><summary><b>${p.product}</b> <span class="pill">${p.fired}/${p.expected} firing</span> ${stateBadge}${anyMacro ? ' <span class="macro-warn">unfilled macros</span>' : ''}<span class="caret">&#9654;</span></summary>
+      const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected} firing</span>` : '';
+      return `<details class="prod"><summary><b>${p.product}</b>${countPill} ${stateBadge}<span class="caret">&#9654;</span></summary>
        <ul>` + p.pixels.map(px =>
         `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ' <span class="evidence">working, but should be consent-gated</span>' : ''}${px.macro_warning ? ' <span class="macro-warn">pixel URL contains unreplaced macros like [ORDER] - the template was pasted without filling values, so conversion data will be blank</span>' : ''}
          ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></details>`;
@@ -424,12 +428,25 @@ function renderSite(r, i){
   const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>
       `<li><span class="badge ok">post-consent</span><div><b>${h.vendor}</b><div class="u">${h.url}</div></div></li>`).join('') + `</ul>` : '';
 
+  const missingProds = prods.filter(p => p.fired === 0);
+  const headBadges = [
+    r.verdict === 'misconfigured' ? '<span class="badge bad">pre-consent fires</span>' : '',
+    missingProds.length ? '<span class="badge bad">pixels missing</span>' : '',
+    r.verdict === 'error' ? '<span class="badge warn">scan error</span>' : '',
+    r.mode !== 'full' ? `<span class="badge neutral">${r.mode}</span>` : '',
+  ].join('');
+  const prodStat = prods.map(p => {
+    const count = p.expected > 1 ? ` ${p.fired}/${p.expected}` : '';
+    const cls = p.fired === 0 ? 'bad' : p.fired < p.expected ? 'warn' : 'ok';
+    const mark = p.fired === 0 ? '&#10007;' : '&#10003;';
+    return `<span class="pstat ${cls}">${p.product}${count} ${mark}</span>`;
+  }).join('');
   return `<div class="site" id="site-${i}">
     <div class="site-head" onclick="this.parentElement.classList.toggle('open')">
-      <span class="badge ${meta.cls}">${meta.label}</span>
+      ${headBadges}
       <span class="site-url">${r.url}</span>
       ${cmpNames ? `<span class="cmp-name">${cmpNames}</span>` : ''}
-      <span class="badge neutral">${r.mode}</span>
+      ${prodStat}
       <span class="scanned">${r.scanned_local || r.scanned_at || ''}</span>
       <span class="caret">&#9654;</span>
     </div>

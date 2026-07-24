@@ -156,3 +156,13 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Conversion URLs that duplicate the client website (or each other,
   ignoring http/https, www, and trailing slashes) are skipped in scans,
   when saving to recurring, and in cron runs of previously saved sites.
+
+## v0.8.3
+- Page rows: badges only for real problems (pre-consent fires, pixels
+  missing, scan error). No CMP shows no badge; the empty CMP column in
+  the chain still tells the story. Full-mode chip removed as noise.
+- Product status inline on each row: name + check/X (green check all
+  firing, amber partial, red X missing). Counts (#/#) shown only for
+  multi-pixel products i.e. BARCK+.
+- Removed the unfilled-macros summary chip; the per-pixel explanation
+  remains inside the expanded product detail.
