@@ -442,3 +442,9 @@ banner visibility, Consent Mode, or pre-consent fires.
   CMP, seen on gohansel.com): domain, JS globals, banner selectors,
   and their "Deny targeting cookies" button in the reject fallback.
   GTM trigger event not yet mapped - noted in the CMP notes.
+
+## v0.12.10
+- SEO product added: checks Google Analytics (GA4 g/collect plus
+  legacy UA collect endpoints). Pairs with the SEO quote tool line -
+  monitoring proves the analytics client reporting depends on is
+  actually firing and consent-gated.

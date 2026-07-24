@@ -240,6 +240,13 @@ PRODUCT_PIXELS = {
          "patterns": ["google-analytics.com/g/collect",
                       "analytics.google.com/g/collect"]},
     ],
+    "SEO": [
+        {"name": "Google Analytics",
+         "patterns": ["google-analytics.com/g/collect",
+                      "analytics.google.com/g/collect",
+                      "google-analytics.com/collect",
+                      "google-analytics.com/j/collect"]},
+    ],
     "PPC": [
         {"name": "Google Ads", "patterns": ["googleadservices.com",
                                             "googleads.g.doubleclick.net"]},
