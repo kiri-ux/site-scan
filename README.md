@@ -185,3 +185,11 @@ banner visibility, Consent Mode, or pre-consent fires.
   conversion URLs, and product selection back into the scan form for
   adjusting and re-running (the re-run is saved as a new run; the
   original stays in history until deleted).
+
+## v0.9.2
+- Verdict box renders as separate rows (finding / product pixels /
+  missing list) instead of one paragraph.
+- Pages with NO CMP no longer stamp each tracker as a VIOLATION -
+  trackers list as neutral "ungated" inventory, and the red flag stays
+  on the site-level missing-CMP verdict. VIOLATION is reserved for a
+  present-but-bypassed consent setup.

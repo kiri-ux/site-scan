@@ -128,6 +128,8 @@
   .verdict.ok{background:var(--ok-bg)} .verdict.bad{background:var(--bad-bg)}
   .verdict.warn{background:var(--warn-bg)} .verdict.neutral{background:var(--info-bg)}
   .verdict strong{font-weight:700}
+  .verdict .vline{padding:2px 0}
+  .verdict .vline + .vline{border-top:1px dashed rgba(0,0,0,.08)}
 
   .detail h3{font-family:'Barlow Condensed',sans-serif;font-size:13.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--atlas);margin:14px 0 6px}
   .detail ul{list-style:none}
@@ -405,7 +407,7 @@ function renderSite(r, i){
         ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}</div></li>`).join('') + `</ul>` : '';
 
   const fires = r.pre_consent.length ? `<h3>Requests before consent</h3><ul>` + r.pre_consent.map(h =>
-      `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}">${h.severity}</span>
+      `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}">${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
         <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Requests before consent</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
@@ -453,7 +455,7 @@ function renderSite(r, i){
     </div>
     <div class="site-body">
       ${chain}
-      <div class="verdict ${meta.cls}">${r.verdict_detail || r.error || ''}</div>
+      <div class="verdict ${meta.cls}">${(r.verdict_lines && r.verdict_lines.length ? r.verdict_lines : [r.verdict_detail || r.error || '']).map(l => `<div class="vline">${l}</div>`).join('')}</div>
       ${kvBits.length ? `<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px">${kvBits.join('')}</div>` : ''}
       <div class="detail">${cmpDetail}${fires}${dspDetail}${gated}</div>
     </div>

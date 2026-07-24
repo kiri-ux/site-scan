@@ -372,7 +372,12 @@ def _full_scan_impl(browser, url, products=None):
             continue
         seen_vendors.add(tracker["vendor"])
 
-        if tracker["google"] and _gcs_denied(req_url):
+        if not result["cmps"]:
+            severity, note = "ungated", ("No consent mechanism on this page, "
+                                         "so this tag runs ungated. The "
+                                         "finding is the missing CMP, not "
+                                         "this individual tag.")
+        elif tracker["google"] and _gcs_denied(req_url):
             severity, note = "info", ("Consent Mode cookieless ping in a "
                                       "denied state - expected behavior.")
         elif tracker["google"] and result["consent_mode_default"] is True:
@@ -390,7 +395,8 @@ def _full_scan_impl(browser, url, products=None):
         })
 
     result["pre_consent"].sort(
-        key=lambda h: {"violation": 0, "warn": 1, "info": 2}[h["severity"]])
+        key=lambda h: {"violation": 0, "warn": 1, "ungated": 2,
+                       "info": 3}[h["severity"]])
 
     # trackers that fired ONLY after Accept = correctly gated + working
     post_vendors = {}
@@ -570,14 +576,20 @@ def _apply_verdict(r):
         ev = next((c["gtm_event"] for c in r["cmps"] if c["gtm_event"]), None)
         if ev:
             r["verdict_detail"] += f" GTM trigger event: {ev}"
+    lines = [r["verdict_detail"]] if r["verdict_detail"] else []
     prods = r.get("products") or []
     if prods:
-        bits = [f"{p['product']} {p['fired']}/{p['expected']}" for p in prods]
-        r["verdict_detail"] += " Product pixels: " + ", ".join(bits) + "."
+        bits = [f"{p['product']} {p['fired']}/{p['expected']}"
+                if p["expected"] > 1 else p["product"] +
+                (" \u2713" if p["fired"] else " \u2717")
+                for p in prods]
+        lines.append("Product pixels: " + ", ".join(bits) + ".")
         missing = [p["product"] for p in prods if p["fired"] == 0]
         if missing:
-            r["verdict_detail"] += (" MISSING (expected but no pixels seen): "
-                                    + ", ".join(missing) + ".")
+            lines.append("MISSING (expected but no pixels seen): "
+                         + ", ".join(missing) + ".")
+    r["verdict_lines"] = lines
+    r["verdict_detail"] = " ".join(lines)
     return r
 
 
