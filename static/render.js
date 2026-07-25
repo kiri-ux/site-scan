@@ -111,7 +111,11 @@ function actionItemsHtml(rs, impl){
   // no CMP: what the LAW requires is a working opt-out method - a
   // banner is the recommended delivery, never the requirement itself
   const mechFail = (main.state_checks || []).some(c => c.check === 'Opt-out mechanism' && c.status === 'fail');
-  if (!hasCmp && main.ok && main.mode === 'full'){
+  // A failing mechanism check always gets an action item, even on a
+  // site that has a banner - a notice-only bar can't decline, so it
+  // fails the check while hasCmp stays true (hasCmp still drives the
+  // gating item below, where the banner's presence is the point).
+  if (main.ok && main.mode === 'full' && (mechFail || !hasCmp)){
     if (mechFail){
       const mechStates = (main.state_checks || []).filter(c => c.check === 'Opt-out mechanism' && c.status === 'fail').map(c => c.state);
       const followUp = pixOwner === 'VICI'
@@ -119,7 +123,14 @@ function actionItemsHtml(rs, impl){
         : pixOwner === 'CLIENT'
         ? "Once one is in place, the client's team applies the consent procedure in their container (steps below)."
         : 'Once one is in place, the consent procedure gates the pixels (steps below; owner per Implementation).';
-      push('CLIENT', `Give residents a working opt-out method - required for ${mechStates.join(' & ')} targeting and currently absent (no banner, no opt-out link, GPC not honored). Recommended fix: a consent banner (CMP), which delivers the opt-out link, GPC handling, and pixel gating in one install - the law requires the opt-out, not the banner itself. ${followUp}${GTM_PROCEDURE}`);
+      const noticeOnly = (main.cmps || []).some(c => c.name === 'Notice-only banner');
+      const absent = noticeOnly
+        ? 'the banner is notice-only with no reject option, no opt-out link, GPC not honored'
+        : 'no banner, no opt-out link, GPC not honored';
+      const fix = noticeOnly
+        ? 'Recommended fix: replace the notice-only bar with a real consent banner (CMP)'
+        : 'Recommended fix: a consent banner (CMP)';
+      push('CLIENT', `Give residents a working opt-out method - required for ${mechStates.join(' & ')} targeting and currently absent (${absent}). ${fix}, which delivers the opt-out link, GPC handling, and pixel gating in one install - the law requires the opt-out, not the banner itself. ${followUp}${GTM_PROCEDURE}`);
     } else {
       const followUp2 = pixOwner === 'VICI'
         ? 'Vici applies the consent procedure in the GTM once one is in place (steps below).'

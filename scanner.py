@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.15.29"
+SCANNER_REV = "0.15.31"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -230,6 +230,12 @@ def basic_scan(url, result=None):
 
 # script hosts a hardcoded snippet would reference in raw HTML, per
 # vendor family (beacon endpoints often differ from the include host)
+# A notice-only bar carries an accept/OK button but no reject or
+# preferences control, so it delivers no opt-out. Named here because
+# the state opt-out check must not count it as "a CMP exists".
+NOTICE_ONLY_CMP = "Notice-only banner"
+
+
 _SCRIPT_MARKERS = {
     "Meta Pixel": ["connect.facebook.net", "fbq("],
     "Google Analytics 4": ["gtag/js?id=", "gtag('config'", 'gtag("config"'],
@@ -477,7 +483,7 @@ def _full_scan_impl(browser, url, products=None, states=None,
                                             or generic.get("gpp")))
                     if notice_only:
                         result["cmps"].append({
-                            "name": "Notice-only banner",
+                            "name": NOTICE_ONLY_CMP,
                             "evidence": ["heuristic: anchored bar with "
                                          "cookie text and an accept/OK "
                                          "button but no reject or "
@@ -755,9 +761,17 @@ def _full_scan_impl(browser, url, products=None, states=None,
         # A banner itself isn't required under these opt-out laws, so
         # "no CMP" alone is never flagged as a state failure.
         gpc_ignored = result["gpc_tested"] and result["gpc_fires"]
-        if (not result["cmps"] and not result["optout_link"]
+        # A notice-only bar is not a mechanism - it cannot decline - so
+        # it must not suppress this check the way a real CMP does.
+        # "Unrecognized consent banner" DOES have choices and still does.
+        real_cmp = [c for c in result["cmps"]
+                    if c["name"] != NOTICE_ONLY_CMP]
+        notice_only_seen = len(real_cmp) < len(result["cmps"])
+        if (not real_cmp and not result["optout_link"]
                 and (gpc_ignored or not cfg.get("gpc"))):
-            bits = ["no consent banner/CMP", "no opt-out link"]
+            bits = ["a notice-only banner with no reject option"
+                    if notice_only_seen else "no consent banner/CMP",
+                    "no opt-out link"]
             if gpc_ignored:
                 bits.append("ad trackers contacted despite the GPC signal")
             result["state_checks"].append(
