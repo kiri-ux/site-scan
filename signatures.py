@@ -269,7 +269,7 @@ PRODUCT_PIXELS = {
         {"name": "Google Ads", "patterns": ["googleadservices.com",
                                             "googleads.g.doubleclick.net"]},
     ],
-    "Performance Max": [
+    "PMax": [
         {"name": "Google Ads", "patterns": ["googleadservices.com",
                                             "googleads.g.doubleclick.net"]},
     ],

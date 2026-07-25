@@ -659,3 +659,15 @@ banner visibility, Consent Mode, or pre-consent fires.
   recommended fix; without a mandate it reads "Recommended (not
   required)". The standalone opt-out-link item folds into the
   mechanism item when both would appear.
+
+## v0.15.4
+- "Performance Max" renamed "PMax" everywhere; saved clients and old
+  payloads using the long name still scan via an alias, and Edit
+  restores normalize it.
+- Run-history dots now go red when state checks fail, not just on
+  verdict/pixel problems - matching the NEEDS ATTENTION logic.
+
+## v0.15.5
+- Field-label hint text moved into hover tooltips with a small info
+  glyph - Partner, Industries, Implementation, Conversion URLs,
+  Products, and State targets labels are one line each now.

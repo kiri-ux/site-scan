@@ -129,6 +129,7 @@
   .prodflat{margin:0 0 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
   .prodhead{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px dashed var(--line);font-size:14px}
   .prodflat ul{padding:4px 12px 8px}
+  .info{color:var(--velocity);font-size:12px;cursor:help;font-weight:400}
   .field-label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--atlas);margin:14px 0 6px}
   .field-label:first-of-type{margin-top:0}
   .field-label .opt{font-family:'Barlow',sans-serif;text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);font-size:12.5px}
@@ -280,17 +281,17 @@
         <input id="client-name" type="text" class="text-input" placeholder="Town &amp; Country Ford">
       </div>
       <div>
-        <label class="field-label" for="partner-name">Partner name <span class="opt">(the agency this client belongs to)</span></label>
+        <label class="field-label" for="partner-name" data-tip="The agency this client belongs to">Partner name <span class="info">&#9432;</span></label>
         <input id="partner-name" type="text" class="text-input" placeholder="Larsen Media Group">
       </div>
     </div>
-    <label class="field-label" style="margin-top:12px">Client industries <span class="opt">(as partners classify on the order - stricter-regulated industries add sensitive-context checks automatically)</span></label>
+    <label class="field-label" style="margin-top:12px" data-tip="As partners classify on the order - stricter-regulated industries add sensitive-context checks automatically">Client industries <span class="info">&#9432;</span></label>
 <div class="ms" id="ind-ms">
   <input type="text" id="ind-search" class="text-input" placeholder="Search industries..." autocomplete="off">
   <div class="ms-list" id="ind-list" style="display:none"></div>
 </div>
 <div class="chips" id="ind-selected" style="margin-top:6px"></div>
-    <label class="field-label" style="margin-top:12px" for="impl-select">Implementation <span class="opt">(who manages this client's tags - drives action-item ownership)</span></label>
+    <label class="field-label" style="margin-top:12px" for="impl-select" data-tip="Who manages this client's tags - drives action-item ownership (Vici-owned GTM = buyer fixes directly; Client placement = Vici provides code, client installs)">Implementation <span class="info">&#9432;</span></label>
     <select id="impl-select" class="text-input" style="max-width:340px">
       <option value="">&mdash; Not set &mdash;</option>
       <option value="Vici-owned GTM">Vici-owned GTM</option>
@@ -298,13 +299,13 @@
     </select>
     <label class="field-label" for="site-url">Client website</label>
     <input id="site-url" type="text" class="text-input" placeholder="clientsite.com">
-    <label class="field-label" for="conv-input">Conversion URLs to check <span class="opt">(optional - landing pages, thank-you pages. Type or paste, Enter to add)</span></label>
+    <label class="field-label" data-tip="Optional - landing pages, thank-you pages. Type or paste, Enter to add" for="conv-input">Conversion URLs to check <span class="info">&#9432;</span></label>
     <div class="pillbox" id="conv-pillbox" onclick="document.getElementById('conv-input').focus()">
       <input id="conv-input" type="text" placeholder="clientsite.com/thank-you">
     </div>
-    <label class="field-label">Products <span class="opt">(select what this client runs - unselected products are still detected if seen)</span></label>
+    <label class="field-label" data-tip="Select what this client runs - unselected products are still detected if seen">Products <span class="info">&#9432;</span></label>
     <div class="chips" id="product-chips"></div>
-    <label class="field-label">State targets <span class="opt">(where this client's campaigns run - adds GPC and opt-out checks for those states)</span></label>
+    <label class="field-label" data-tip="Where this client's campaigns run - adds GPC and opt-out checks for those states">State targets <span class="info">&#9432;</span></label>
     <div class="chips" id="state-chips"></div>
 <div class="hint">Full scan loads each page in a headless browser, records pre-consent fires, clicks Accept, then verifies the selected products' pixels. Roughly 15&ndash;40 seconds per page.</div>
     <div class="row">
@@ -424,7 +425,8 @@ const STORE_KEY = 'consent-scan-results-v1';
 let results = [];
 
 let dbEnabled = false;
-const PRODUCTS = ['Amazon','BARCK+','LinkedIn','Meta','Mobile','PPC','Performance Max','SEO','TikTok','WVID','YouTube'];
+const PRODUCTS = ['Amazon','BARCK+','LinkedIn','Meta','Mobile','PPC','PMax','SEO','TikTok','WVID','YouTube'];
+const normProduct = p => p === 'Performance Max' ? 'PMax' : p;
 const INDUSTRIES = {{ industries_json|safe }};
 let selectedIndustries = [];
 
@@ -677,7 +679,7 @@ function editSite(i){
   $('impl-select').value = s.implementation || '';
   $('site-url').value = s.url;
   convUrls = sanitizeConvList(s.conversion_urls); renderConvPills();
-  selectedProducts = [...(s.products || [])];
+  selectedProducts = (s.products || []).map(normProduct);
   selectedStates = [...(s.states || [])];
   $('sched-freq').value = s.frequency === 'off' ? 'daily' : s.frequency;
   renderChips();
@@ -767,7 +769,7 @@ function renderClient(cg){
            || runs.find(g => g.key === freshRunId) || runs[0];
   const verBar = runs.length > 1 ? `<div class="ver-bar">${runs.map(g => {
       const w = g.items[0].r.scanned_local || g.items[0].r.scanned_at || '';
-      const worst = g.items.some(x => ['misconfigured','error'].includes(x.r.verdict) || (x.r.products||[]).some(p => p.fired < p.expected));
+      const worst = g.items.some(x => ['misconfigured','error'].includes(x.r.verdict) || (x.r.products||[]).some(p => p.fired < p.expected) || (x.r.state_checks||[]).some(c => c.status === 'fail'));
       return `<button class="ver-pill${g.key === sel.key ? ' on' : ''}" onclick="event.stopPropagation(); pickVersion('${cg.ck.replace(/'/g,"\\'")}','${g.key.replace(/'/g,"\\'")}')"><span class="dot ${worst ? 'bad' : 'ok'}"></span>${w}</button>`;
     }).join('')}</div>` : '';
   return renderGroup(sel, cg, verBar);
@@ -852,7 +854,7 @@ function editRun(key){
   convUrls = sanitizeConvList(g.items.filter(it => it !== main).map(it => it.r.url)); renderConvPills();
   // selected products = products reported on the main page (selection mode
   // reports all selected incl. 0-firing; detect-any reports fired only)
-  selectedProducts = (main.r.products || []).map(p => p.product)
+  selectedProducts = (main.r.products || []).map(p => normProduct(p.product))
     .filter(p => PRODUCTS.includes(p));
   selectedStates = [...(main.r.states || [])];
   renderChips();

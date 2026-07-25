@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.15.0"
+SCANNER_REV = "0.15.4"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -733,6 +733,8 @@ def _full_scan_impl(browser, url, products=None, states=None,
         except Exception:
             pass  # container fetch is best-effort evidence only
 
+    _ALIASES = {"Performance Max": "PMax"}  # saved clients / old payloads
+    products = [_ALIASES.get(p, p) for p in products] if products else products
     selected = products if products else list(PRODUCT_PIXELS.keys())
     detect_any = not products
     for prod in selected:
