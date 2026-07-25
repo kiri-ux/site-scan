@@ -3,7 +3,7 @@ const TIPS = {
   'not found': 'No matching request fired AND no trace of this tag was found in the page source or the GTM container JS. It was most likely never installed on this page - a placement conversation, not a debugging one.',
   'not seen': 'No request matching this pixel was observed on this page, before or after consent. From outside we cannot tell not-installed from blocked - it may also fire only on specific pages or events (a thank-you page, a form submit). The GTM config audit is what settles it.',
   'pre-consent only': 'This page HAS a consent banner, and this pixel fired before any consent interaction - it is jumping the banner. Working, but not consent-gated.',
-  'ungated-pixel': 'This pixel runs unrestricted because the page has no consent mechanism at all. It is working - the finding is the missing CMP (the site-level condition), and once a banner is installed this pixel should be consent-gated behind it.',
+  'ungated-pixel': 'This pixel runs unrestricted because the page has no consent mechanism at all. It is working - the finding is the missing CMP (the site-level condition), and if the client adds a banner, this pixel should then be gated behind it. US state laws don\u2019t require the banner itself - see the opt-out mechanism check for what they do require.',
   'pre + post': 'Fired both before AND after Accept. The post-consent fire is fine - the pre-consent fire is the problem half, since it ran before the visitor agreed.',
   'post-consent': 'Fired only after Accept was clicked - correctly consent-gated. This is the target state for every tracking pixel.',
   'firing': 'Every expected pixel for this product was observed on this page.',
@@ -171,7 +171,7 @@ function renderSite(r, i){
       const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected} firing</span>` : '';
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
-        `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - will need consent-gating once a banner is installed'}</span>` : ''}${px.macro_warning ? ' <span class="macro-warn">pixel URL contains unreplaced macros like [ORDER] - the template was pasted without filling values, so conversion data will be blank</span>' : ''}
+        `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}</span>` : ''}${px.macro_warning ? ' <span class="macro-warn">pixel URL contains unreplaced macros like [ORDER] - the template was pasted without filling values, so conversion data will be blank</span>' : ''}
          ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></div>`;
     }).join('')
     : `<p class="kv">${r.accept_clicked ? 'No product pixels observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';

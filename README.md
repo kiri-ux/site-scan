@@ -552,3 +552,14 @@ banner visibility, Consent Mode, or pre-consent fires.
 ## v0.13.8
 - Capability matrix (tab + one-pager) gains the privacy-policy
   presence check row, positioned above the state-law map.
+
+## v0.13.9
+- Economics rationale bullet reframed from legal-gating to the actual
+  point: ~99% margin with near-zero marginal cost per additional site.
+  (The legal gate still lives in Open decisions and Legal posture.)
+
+## v0.13.10
+- Ungated-pixel copy no longer implies a banner is required: "if the
+  client adds a banner..." replaces "once a banner is installed", with
+  a pointer to the opt-out mechanism check for what state law actually
+  requires.
