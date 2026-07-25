@@ -337,7 +337,7 @@ function renderSite(r, i){
       const stateBadge = p.fired === 0 ? `<span class="badge bad"${tipAttr('missing')}>missing</span>`
                        : p.fired < p.expected ? `<span class="badge warn"${tipAttr('partial')}>partial</span>`
                        : `<span class="badge ok"${tipAttr('firing')}>firing</span>`;
-      const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected} firing</span>` : '';
+      const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected}</span>` : '';
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
         `<li>${pxBadge(px)}<div><b>${px.name}</b>${srcTag(px.src)}${px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}</span>` : ''}
