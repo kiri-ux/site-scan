@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.15.15"
+SCANNER_REV = "0.15.27"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -257,6 +257,43 @@ def _pixel_source(vendor, req_url, low_html):
     except Exception:
         return None
     return "runtime"
+
+
+def _container_corpora(container_ids, limit=3):
+    """Published gtm.js for each container, keyed by container ID.
+
+    These used to be concatenated into one blob, which could answer
+    "configured somewhere" but not "configured where". Keeping them
+    separate is what lets a pixel name the container it lives in.
+    A fetch miss is dropped rather than recorded as empty - absence of
+    evidence here is not evidence of absence.
+    """
+    import urllib.request
+    out = {}
+    for cid in (container_ids or [])[:limit]:
+        try:
+            req = urllib.request.Request(
+                f"https://www.googletagmanager.com/gtm.js?id={cid}",
+                headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                out[cid] = resp.read(2_000_000).decode(
+                    "utf-8", "replace").lower()
+        except Exception:
+            pass  # container fetch is best-effort evidence only
+    return out
+
+
+def _containers_with(hints, corpora):
+    """Container IDs whose published JS carries any of these fingerprints.
+
+    This proves the tag is CONFIGURED in that container, not that this
+    particular request came from it - two containers holding the same
+    vendor tag both match and neither can be ruled out. Definitive
+    attribution needs the CDP initiator chain.
+    """
+    low = [h.lower() for h in hints if h]
+    return sorted(cid for cid, js in corpora.items()
+                  if any(h in js for h in low))
 
 
 def _generic_banner_probe(page):
@@ -787,18 +824,13 @@ def _full_scan_impl(browser, url, products=None, states=None,
     # (publicly fetchable) GTM container JS for the vendor's fingerprints
     # to split "not seen" into "configured but silent" (firing problem)
     # vs "not found anywhere" (likely never installed).
-    code_corpus = html.lower()
-    for cid in (result.get("gtm", {}).get("container_ids") or [])[:3]:
-        try:
-            import urllib.request
-            req = urllib.request.Request(
-                f"https://www.googletagmanager.com/gtm.js?id={cid}",
-                headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                code_corpus += "\n" + resp.read(2_000_000).decode(
-                    "utf-8", "replace").lower()
-        except Exception:
-            pass  # container fetch is best-effort evidence only
+    page_corpus = html.lower()
+    _gtm = result.get("gtm", {}) or {}
+    _cids = _gtm.get("container_ids") or []
+    corpora = _container_corpora(_cids)
+    _gtm["containers_read"] = sorted(corpora)
+    _gtm["containers_unread"] = [c for c in _cids[:3] if c not in corpora]
+    result["gtm"] = _gtm
 
     _ALIASES = {"Performance Max": "PMax"}  # saved clients / old payloads
     products = [_ALIASES.get(p, p) for p in products] if products else products
@@ -812,10 +844,12 @@ def _full_scan_impl(browser, url, products=None, states=None,
             post_hit = next((u for u in post_urls
                              if any(p in u for p in px["patterns"])), None)
             hit_url = (post_hit or pre_hit) or ""
+            hints = list(px["patterns"]) + CODE_HINTS.get(px["name"], [])
+            in_containers = _containers_with(hints, corpora)
             configured = None
             if not pre_hit and not post_hit:
-                hints = list(px["patterns"]) + CODE_HINTS.get(px["name"], [])
-                configured = any(h.lower() in code_corpus for h in hints)
+                configured = bool(in_containers) or any(
+                    h.lower() in page_corpus for h in hints)
             pixels.append({
                 "name": px["name"],
                 "fired_pre": bool(pre_hit),
@@ -824,6 +858,10 @@ def _full_scan_impl(browser, url, products=None, states=None,
                 "sample_url": hit_url[:220],
                 "src": (_pixel_source(px["name"], hit_url, raw_low)
                         if hit_url else None),
+                # Containers whose published JS carries this pixel's
+                # fingerprint. Evidence of configuration, not proof of
+                # which one fired - see _containers_with.
+                "containers": in_containers,
                 # Unreplaced trafficking macros like [ORDER] or {orderid}
                 # mean the template was pasted without filling values.
                 "macro_warning": bool(re.search(

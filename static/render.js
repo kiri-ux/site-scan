@@ -60,8 +60,11 @@ const GTM_PROCEDURE = `<details class="ai-proc"><summary>GTM consent procedure -
 <li><b>Publish, then re-scan:</b> the report should show Defaults &#10003; CORRECT SETUP, no pre-consent fires, and reject honored - the before/after pair is the verification.</li>
 </ol></details>`;
 
-function srcTag(s){
-  if (s === 'runtime') return ` <span class="src-tag gtm" data-tip="Injected at runtime - no trace in the raw page source. With a GTM on the page, this is how GTM-managed tags load.">GTM</span>`;
+function srcTag(s, containers){
+  const c = (containers || []).filter(Boolean);
+  if (s === 'runtime' && c.length === 1) return ` <span class="src-tag gtm" data-tip="Injected at runtime, and this pixel's fingerprint appears in ${c[0]}'s published container - strong evidence that is the source. It proves the tag is configured there, not that this exact request came from it.">${c[0]}</span>`;
+  if (s === 'runtime' && c.length > 1) return ` <span class="src-tag gtm" data-tip="Injected at runtime. The fingerprint appears in more than one container (${c.join(', ')}), so container code alone can't say which one fired it.">GTM &times;${c.length}</span>`;
+  if (s === 'runtime') return ` <span class="src-tag gtm" data-tip="Injected at runtime - no trace in the raw page source. With a GTM on the page, this is how GTM-managed tags load. No container fingerprint matched, so the specific container is unresolved.">GTM</span>`;
   if (s === 'page') return ` <span class="src-tag page" data-tip="Hardcoded - the vendor's snippet appears in the raw page source, outside any tag manager.">HARDCODED</span>`;
   return '';
 }
@@ -340,7 +343,7 @@ function renderSite(r, i){
       const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected}</span>` : '';
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
-        `<li>${pxBadge(px)}<div><b>${px.name}</b>${srcTag(px.src)}${px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}</span>` : ''}
+        `<li>${pxBadge(px)}<div><b>${px.name}</b>${srcTag(px.src, px.containers)}${px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}</span>` : ''}
          ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></div>`;
     }).join('')
     : `<p class="kv">${r.accept_clicked ? 'No product pixels observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';
