@@ -744,3 +744,14 @@ banner visibility, Consent Mode, or pre-consent fires.
 
 ## v0.15.16
 - "Cookie notice (notice-only)" renamed "Notice-only banner".
+
+## v0.15.17
+- Every fired pixel row carries a source tag: outlined blue GTM
+  (injected at runtime) or gold-tinted HARDCODED (in raw page source),
+  with explanatory hovers - product pixels, Other pixels, aggregates,
+  and after-reject lists.
+- The gating action item commits to what was detected: unanimous
+  GTM-injected or hardcoded gets ONE fix sentence; mixed splits the
+  vendors by source with the right fix for each; the conditional
+  both-branch text only remains when no source data exists. Vendor
+  list no longer repeats.
