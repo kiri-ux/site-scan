@@ -279,6 +279,12 @@
         <input id="partner-name" type="text" class="text-input" placeholder="Larsen Media Group">
       </div>
     </div>
+    <label class="field-label" style="margin-top:12px">Client industries <span class="opt">(as partners classify on the order - stricter-regulated industries add sensitive-context checks automatically)</span></label>
+<div class="ms" id="ind-ms">
+  <input type="text" id="ind-search" class="text-input" placeholder="Search industries..." autocomplete="off">
+  <div class="ms-list" id="ind-list" style="display:none"></div>
+</div>
+<div class="chips" id="ind-selected" style="margin-top:6px"></div>
     <label class="field-label" for="site-url">Client website</label>
     <input id="site-url" type="text" class="text-input" placeholder="clientsite.com">
     <label class="field-label" for="conv-input">Conversion URLs to check <span class="opt">(optional - landing pages, thank-you pages. Type or paste, Enter to add)</span></label>
@@ -289,12 +295,6 @@
     <div class="chips" id="product-chips"></div>
     <label class="field-label">State targets <span class="opt">(where this client's campaigns run - adds GPC and opt-out checks for those states)</span></label>
     <div class="chips" id="state-chips"></div>
-    <label class="field-label" style="margin-top:12px">Client industries <span class="opt">(as partners classify on the order - stricter-regulated industries add sensitive-context checks automatically)</span></label>
-<div class="ms" id="ind-ms">
-  <input type="text" id="ind-search" class="text-input" placeholder="Search industries..." autocomplete="off">
-  <div class="ms-list" id="ind-list" style="display:none"></div>
-</div>
-<div class="chips" id="ind-selected" style="margin-top:6px"></div>
 <div class="hint">Full scan loads each page in a headless browser, records pre-consent fires, clicks Accept, then verifies the selected products' pixels. Roughly 15&ndash;40 seconds per page.</div>
     <div class="row">
       <button class="btn-primary" id="go">Scan sites</button>
@@ -329,6 +329,7 @@
   <tr><td>Accept-path simulation (clicks the banner)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td data-tip="Basic banner interaction, not full accept-path verification" class="part">limited</td><td data-tip="Sees consent clicks real visitors happen to make - can't force the scenario on demand" class="part">real users</td><td class="no">&mdash;</td></tr>
   <tr><td>Reject-path test (fires after user says no?)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td data-tip="Catches reject violations only if a monitored visitor actually rejects" class="part">via real traffic</td><td class="no">&mdash;</td></tr>
   <tr><td>GPC signal test (12 states now require honoring)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td data-tip="Audits can be configured to send GPC - not a built-in check" class="part">config</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td data-tip="They respect the signal on their own banner; they don't test whether the site does" class="part">honor, don't test</td></tr>
+  <tr><td>Industry-aware sensitive-context checks (health / financial / children)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td data-tip="Markets a healthcare edition - vertical focus, not per-client industry rules" class="part">healthcare focus</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td data-tip="Detects PII leaking into pixels - data-level, not industry-rule-driven" class="part">PII leaks</td><td class="no">&mdash;</td></tr>
   <tr><td>Privacy policy presence check (FTC &sect;5 baseline)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td data-tip="They write policies - they don't check a live page links one" class="part">policy generators</td></tr>
   <tr><td>State-law check map with citations (20 states)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
   <tr><td>Vici product verification (BARCK+ 5/5, Meta, Mobile&hellip;)</td><td class="vici"><span class="only">Only us</span></td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
@@ -562,6 +563,17 @@ function buildLawsPanel(){
       <li>Opt-out link presence, and the opt-out mechanism check (no CMP + no link + GPC ignored = no way to opt out at all)</li>
       <li>Google Consent Mode defaults (correct vs leaking vs not configured)</li>
     </ul>
+    <h3>Stricter-regulated industries</h3>
+    <p style="margin:0 0 8px;font-size:13px;color:var(--muted)">Selecting these client industries adds sensitive-context checks automatically. The industry is partner-declared; the scanner only reports what fires.</p>
+    ${Object.keys(INDUSTRY_RULES).map(k => {
+      const r = INDUSTRY_RULES[k];
+      return `<details class="lp-state"><summary>${k}<span class="lp-tags"><span class="lp-tag">${r.triggers.length} ${r.kind === 'prefix' ? 'industry groups' : 'industries'}</span></span></summary>
+        <div class="lp-detail">
+          <div><b>Triggered by:</b> ${r.triggers.join('; ')}${r.kind === 'prefix' ? ' (and sub-categories)' : ''}</div>
+          <div style="margin-top:6px"><b>Why:</b> ${r.basis}</div>
+          <div style="margin-top:6px"><b>What the scanner does:</b> ${r.scanner}</div>
+        </div></details>`;
+    }).join('')}
     <h3>State-by-state</h3>`;
   const states = Object.keys(STATE_LAWS).sort().map(code => {
     const s = STATE_LAWS[code];
@@ -784,7 +796,7 @@ function renderGroup(g, cg, verBar){
     </div>
     <div class="rg-body">
       ${verBar}
-      <div class="rg-summary" title="Summary for the main site (shortest URL in this run). Per-page details below.">${chainFor(mainItem(g).r)}<div class="detail">${stateChecksHtml(mainItem(g).r)}</div></div>
+      <div class="rg-summary" title="Summary for the main site (shortest URL in this run). Per-page details below.">${chainFor(mainItem(g).r, {states: false})}<div class="detail">${stateChecksHtml(mainItem(g).r)}</div></div>
       ${g.items.map(({r, i}) => renderSite(r, i)).join('')}
     </div>
   </div>`;
@@ -997,7 +1009,8 @@ loadSchedule();
   <div class="lp-body" id="lp-body"></div>
   <div class="lp-foot">Check-based summaries for scan interpretation - not legal advice. State map last reviewed {{ states_reviewed }}; counsel review pending. Sources: state statutes and regulator guidance cited per state.</div>
 </aside>
-<script>const STATE_LAWS = {{ states_json|safe }};</script>
+<script>const STATE_LAWS = {{ states_json|safe }};
+const INDUSTRY_RULES = {{ industry_rules_json|safe }};</script>
 <div id="tipbox" role="tooltip"></div>
 <script>
 (function(){

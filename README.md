@@ -610,3 +610,17 @@ banner visibility, Consent Mode, or pre-consent fires.
   appears on a product pixel row or in Other pixels - same tag, same
   meaning, same color. Its tooltip still explains the product-pixel
   nuance.
+
+## v0.14.4
+- Laws panel gains a "Stricter-regulated industries" section generated
+  from industries.py: per context, the triggering industries, the
+  legal basis, and exactly what the scanner does. Cannot drift from
+  the code that enforces it.
+- Capability matrix (tab + one-pager) gains the industry-aware
+  sensitive-context checks row - Lokker noted for healthcare focus,
+  Trackingplan for PII-leak detection, nobody for per-client industry
+  rules.
+
+## v0.14.5
+- Client industries multiselect moved up under the Client/Partner name
+  row, ahead of the website field - matching order-form flow.

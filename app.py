@@ -37,7 +37,7 @@ def _extract_conv_urls(chunk):
     return out
 from signatures import PRODUCT_NAMES
 from state_checks import STATE_CODES, STATE_CHECKS, LAST_REVIEWED
-from industries import INDUSTRIES, derive_contexts
+from industries import INDUSTRIES, derive_contexts, SENSITIVE_RULES
 
 app = Flask(__name__)
 
@@ -111,6 +111,7 @@ def index():
     return render_template("index.html", build=BUILD, deployed=DEPLOYED,
                            states_json=_json.dumps(STATE_CHECKS),
                            industries_json=_json.dumps(INDUSTRIES),
+                           industry_rules_json=_json.dumps(SENSITIVE_RULES),
                            states_reviewed=LAST_REVIEWED)
 
 

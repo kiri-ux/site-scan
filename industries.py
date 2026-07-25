@@ -180,6 +180,43 @@ _CHILDREN_EXACT = {"Child Care - Daycare / Day Camp / Summer Camp",
                    "Retail - Toys"}
 
 
+SENSITIVE_RULES = {
+    "Healthcare": {
+        "triggers": list(_HEALTH_PREFIXES),
+        "kind": "prefix",
+        "basis": "Most state privacy laws treat health data as sensitive, "
+                 "requiring OPT-IN consent (not just an opt-out); WA My "
+                 "Health My Data goes further with a private right of "
+                 "action. FTC actions (GoodRx, BetterHelp) and the hospital "
+                 "pixel litigation wave target ad pixels on health pages.",
+        "scanner": "Fails when ad/analytics trackers fire ungated on a "
+                   "declared health-context site; warns even when gated, "
+                   "because sensitive-data opt-in quality needs review.",
+    },
+    "Financial services": {
+        "triggers": list(_FINANCIAL_PREFIXES),
+        "kind": "prefix",
+        "basis": "GLBA covers customer financial data, and CFPB/FTC have "
+                 "scrutinized pixels on loan and account pages. Several "
+                 "state laws exempt GLBA-covered data but not the rest of "
+                 "the site's tracking.",
+        "scanner": "Warns when trackers fire without consent gating on a "
+                   "declared financial-services site.",
+    },
+    "Children-directed": {
+        "triggers": sorted(_CHILDREN_EXACT),
+        "kind": "exact",
+        "basis": "COPPA (federal) requires verifiable PARENTAL consent "
+                 "before collecting personal information from under-13s - "
+                 "a normal consent banner does not satisfy it. Behavioral "
+                 "advertising to children is the FTC's most actively "
+                 "enforced tracking rule.",
+        "scanner": "Fails when ANY trackers are observed on a declared "
+                   "child-directed site.",
+    },
+}
+
+
 def derive_contexts(industries):
     """Map selected industries to sensitive-context check categories."""
     out = set()
