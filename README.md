@@ -541,3 +541,10 @@ banner visibility, Consent Mode, or pre-consent fires.
   generated live from state_checks.py - so the panel can never drift
   from what the scanner enforces. Review date + not-legal-advice
   footer built in.
+
+## v0.13.7
+- Universal privacy-policy check on every main-site full scan: a "US"
+  row in the state checks passing when a privacy policy/notice link
+  (or /privacy href) is present, failing when a tracking site has none
+  - the FTC \xc2\xa75 baseline. Presence-only; content accuracy flagged for
+  human review in the detail text.

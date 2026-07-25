@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.13.6"
+SCANNER_REV = "0.13.7"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -397,6 +397,14 @@ def _full_scan_impl(browser, url, products=None, states=None,
         result["optout_link"] = next(
             (p for p in OPTOUT_LINK_PHRASES if p in low_html), None)
 
+        # --- privacy policy link (universal FTC-baseline check input)
+        result["privacy_policy_link"] = next(
+            (p for p in ("privacy policy", "privacy notice",
+                         "privacy statement", "privacy center")
+             if p in low_html), None)
+        if not result["privacy_policy_link"] and 'href="/privacy' in low_html:
+            result["privacy_policy_link"] = "/privacy (href)"
+
         # --- GTM presence
         gtm_ids = sorted(set(GTM_ID_RE.findall(html + "\n" + net_corpus)))
         result["gtm"] = {
@@ -587,6 +595,24 @@ def _full_scan_impl(browser, url, products=None, states=None,
                 pass
 
     # --- per-state check results
+    # --- universal baseline check (every US site): privacy policy link.
+    # FTC Act §5 applies nationwide - a site tracking visitors with no
+    # accessible privacy policy is the baseline failure. Presence-only:
+    # content accuracy needs human/counsel review.
+    if site_checks and result.get("mode") == "full" and result.get("ok"):
+        pp = result.get("privacy_policy_link")
+        result["state_checks"].append(
+            {"state": "US", "check": "Privacy policy link",
+             "status": "pass" if pp else "fail",
+             "detail": (f'Found "{pp}" on the page. Presence check only - '
+                        "whether the policy accurately describes this "
+                        "site's tracking needs human review."
+                        if pp else
+                        "No privacy policy link found on this page. Every "
+                        "US site that tracks visitors is expected to have "
+                        "an accessible, accurate privacy policy (FTC Act "
+                        "\u00a75 + state laws).")})
+
     for s in (states if site_checks else []):
         cfg = STATE_CHECKS[s]
         if cfg.get("gpc"):
