@@ -307,7 +307,15 @@ function renderSite(r, i){
 
   const gtmEvent = r.cmps.map(c => c.gtm_event).find(Boolean);
   const kvBits = [];
-  if (r.gtm && r.gtm.found) kvBits.push(`<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ') || 'present'}</b></span>`);
+  if (r.gtm && r.gtm.found){
+    // Ownership comes from the Implementation field, so it covers every
+    // container on the page. Blank when unset rather than guessed.
+    const own = r.implementation === 'Vici-owned GTM'
+      ? ` <span class="ob ob-vici">VICI OWNED</span>`
+      : r.implementation === 'Client placement'
+      ? ` <span class="ob ob-ext">CLIENT OWNED</span>` : '';
+    kvBits.push(`<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ') || 'present'}</b>${own}</span>`);
+  }
   if (gtmEvent) kvBits.push(`<span class="kv">Trigger event: <span class="pill">${gtmEvent}</span></span>`);
   const defaults = Object.entries(r.consent_defaults || {});
   if (defaults.length) kvBits.push(`<span class="kv"${tipAttr('defaults')}>Defaults: <b>${defaults.map(([k,v])=>`${k}=${v}`).join(', ')}</b></span>`);
