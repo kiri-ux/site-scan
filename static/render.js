@@ -117,6 +117,10 @@ function actionItemsHtml(rs, impl){
   if (missing.length) push(pixOwner, `Install or repair the ${missing.join(', ')} pixel${missing.length>1?'s':''} - expected but not seen on any scanned page.` + (pixOwner==='CLIENT' ? ' Vici supplies the pixel code.' : ''), 40);
 
   const hasCmp = (main.cmps||[]).length > 0;
+  // Vici-owned GTM means the buyer applies the procedure (and will do
+  // it via the API), so the step list isn't part of the deliverable.
+  const proc = pixOwner === 'VICI' ? '' : GTM_PROCEDURE;
+  const below = pixOwner === 'VICI' ? '' : ' (steps below)';
   // no CMP: what the LAW requires is a working opt-out method - a
   // banner is the recommended delivery, never the requirement itself
   const mechFail = (main.state_checks || []).some(c => c.check === 'Opt-out mechanism' && c.status === 'fail');
@@ -128,7 +132,7 @@ function actionItemsHtml(rs, impl){
     if (mechFail){
       const mechStates = (main.state_checks || []).filter(c => c.check === 'Opt-out mechanism' && c.status === 'fail').map(c => c.state);
       const followUp = pixOwner === 'VICI'
-        ? 'Once one is in place, Vici applies the consent procedure in the GTM (steps below).'
+        ? `Once one is in place, Vici applies the consent procedure in the GTM${below}.`
         : pixOwner === 'CLIENT'
         ? "Once one is in place, the client's team applies the consent procedure in their container (steps below)."
         : 'Once one is in place, the consent procedure gates the pixels (steps below; owner per Implementation).';
@@ -139,14 +143,14 @@ function actionItemsHtml(rs, impl){
       const fix = noticeOnly
         ? 'Recommended fix: replace the notice-only bar with a real consent banner (CMP)'
         : 'Recommended fix: a consent banner (CMP)';
-      push('CLIENT', `Give residents a working opt-out method - required for ${mechStates.join(' & ')} targeting and currently absent (${absent}). ${fix}, which delivers the opt-out link, GPC handling, and pixel gating in one install - the law requires the opt-out, not the banner itself. ${followUp}${GTM_PROCEDURE}`, 10);
+      push('CLIENT', `Give residents a working opt-out method - required for ${mechStates.join(' & ')} targeting and currently absent (${absent}). ${fix}, which delivers the opt-out link, GPC handling, and pixel gating in one install - the law requires the opt-out, not the banner itself. ${followUp}${proc}`, 10);
     } else {
       const followUp2 = pixOwner === 'VICI'
-        ? 'Vici applies the consent procedure in the GTM once one is in place (steps below).'
+        ? `Vici applies the consent procedure in the GTM once one is in place${below}.`
         : pixOwner === 'CLIENT'
         ? "The client's team applies the consent procedure in their container once one is in place (steps below)."
         : 'The consent procedure gates the pixels once one is in place (steps below; owner per Implementation).';
-      push('CLIENT', `Recommended (not required): install a consent banner (CMP) to gate pixels and cover current and future state targeting. ${followUp2}${GTM_PROCEDURE}`, 10);
+      push('CLIENT', `Recommended (not required): install a consent banner (CMP) to gate pixels and cover current and future state targeting. ${followUp2}${proc}`, 10);
     }
   }
   // ONE gating item for everything firing around the banner: product
@@ -179,7 +183,7 @@ function actionItemsHtml(rs, impl){
     const pageCode = [...(gateSet.pageCode || [])];
     const runtime = [...(gateSet.runtime || [])].filter(v => !gateSet.pageCode || !gateSet.pageCode.has(v));
     const gtmFix = pixOwner === 'VICI'
-      ? 'Vici applies the consent procedure in the GTM (steps below).'
+      ? `Vici applies the consent procedure in the GTM${below}.`
       : "the client's team applies the consent procedure in their container (steps below).";
     const pageFix = pixOwner === 'VICI'
       ? 'Vici migrates them into the GTM (or consent-wraps the snippets).'
@@ -192,7 +196,7 @@ function actionItemsHtml(rs, impl){
     } else if (pageCode.length && runtime.length){
       body = `${pageCode.join(', ')} hardcoded in page code (${pageFix}); ${runtime.join(', ')} GTM-injected (${gtmFix})`;
     } else {
-      body = `${gate.join(', ')}. If they run from a GTM, apply the consent procedure in that container (steps below); if hardcoded in page code, consent-wrap or migrate them${pixOwner === 'UNSET' ? ' (owner per Implementation)' : ''}.`;
+      body = `${gate.join(', ')}. If they run from a GTM, apply the consent procedure in that container${below}; if hardcoded in page code, consent-wrap or migrate them${pixOwner === 'UNSET' ? ' (owner per Implementation)' : ''}.`;
     }
     // Why it matters depends on whether state targeting is set. With no
     // states we describe what the scan found, never what the law says.
@@ -200,7 +204,7 @@ function actionItemsHtml(rs, impl){
     const why = gStates.length
       ? ` Flagged for ${gStates.join(' & ')} targeting, where a resident's opt-out has to take effect.`
       : ' No states are selected for this client, so this is not flagged as a state-law requirement. It still matters: the banner offers Reject and these trackers fire anyway.';
-    push(pixOwner, `Consent-gate the trackers firing around the banner - the CMP isn't gating them: ${body}${body.endsWith('.') ? '' : '.'}${why}${GTM_PROCEDURE}`, 20);
+    push(pixOwner, `Consent-gate the trackers firing around the banner - the CMP isn't gating them: ${body}${body.endsWith('.') ? '' : '.'}${why}${proc}`, 20);
     var gatePushed = true;
   }
 
