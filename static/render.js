@@ -76,11 +76,19 @@ function cmBlock(r){
   let stamp = '', note = '';
   if (defaults.length) {
     const granted = defaults.filter(([k, v]) => v !== 'denied').map(([k]) => k);
+    // Denied defaults are only "correct" when a banner can grant
+    // consent. With none, nothing ever flips them and the Google tags
+    // are switched off for good - the opposite of a pass.
+    const noPath = !granted.length && !(r.cmps || []).length;
     stamp = granted.length
       ? `<span class="cm-stamp bad"${tipAttr('defaults')}>&#10007; INCORRECT SETUP</span>`
+      : noPath
+      ? `<span class="cm-stamp bad"${tipAttr('defaults')}>&#10007; BLOCKED - NO CONSENT PATH</span>`
       : `<span class="cm-stamp ok"${tipAttr('defaults')}>&#10003; CORRECT SETUP</span>`;
     note = granted.length
       ? `<div class="cm-note warn">&#9888; <b>${granted.join(', ')}</b> ${granted.length > 1 ? 'are' : 'is'} granted by default - Google tags can track before the visitor consents. The target setup starts every storage type <b>denied</b> and flips to granted on Accept (this is what the GTM consent procedure installs).</div>`
+      : noPath
+      ? `<div class="cm-note warn">&#9888; <b>Every storage type starts denied and there is no consent banner to grant it.</b> Google tags - GA4, Google Ads, Floodlight - run without ad or analytics storage indefinitely: no conversion attribution, no remarketing audiences, GA4 reduced to modelled data. Non-Google pixels (Meta, TikTok, Beeswax, Yahoo, The Trade Desk) are unaffected. Fix by installing a consent banner, or by reverting the defaults until one is in place.</div>`
       : `<div class="cm-note ok">&#10003; Correct setup: every storage type starts <b>denied</b>, so Google tags run cookieless until the visitor accepts - exactly the Consent Mode configuration the GTM consent procedure installs. No consent work needed here.</div>`;
   } else if (r.gtm && r.gtm.found && (r.cmps||[]).length) {
     stamp = `<span class="cm-stamp bad">&#10007; NOT CONFIGURED</span>`;
@@ -322,13 +330,20 @@ function chainFor(r, opts){
   const cmpState = r.cmps.length ? 'pass' : (r.ok ? 'fail' : 'mid');
   const bannerState = r.banner_visible === true ? 'pass'
                     : r.banner_visible === false ? 'fail' : 'mid';
-  const cmState = r.consent_mode_default === true ? 'pass'
+  const cmState = r.consent_mode_default === true
+                ? ((r.cmps || []).length ? 'pass' : 'fail')
                 : r.consent_mode_default === false ? 'fail' : 'mid';
   const viol = r.pre_consent.filter(h => h.severity === 'violation');
   const warns = r.pre_consent.filter(h => h.severity === 'warn');
-  const fireState = viol.length ? 'fail' : (warns.length ? 'mid' : (r.mode==='full' ? 'pass' : 'mid'));
+  // Ungated hits are real fires - the finding is the missing CMP, not
+  // the tag, but the cell must not read "None" while pixels run free.
+  const ungated = r.pre_consent.filter(h => h.severity === 'ungated');
+  const fired = viol.length + ungated.length;
+  const fireState = viol.length ? 'fail'
+                  : (ungated.length || warns.length) ? 'mid'
+                  : (r.mode === 'full' ? 'pass' : 'mid');
   const fireLabel = r.mode !== 'full' ? 'Unknown'
-                  : viol.length ? `${viol.length} firing` : (warns.length ? 'Verify' : 'None');
+                  : fired ? `${fired} firing` : (warns.length ? 'Verify' : 'None');
   const prods = r.products || [];
   const missing = prods.filter(p => p.fired === 0);
   const partial = prods.filter(p => p.fired > 0 && p.fired < p.expected);
