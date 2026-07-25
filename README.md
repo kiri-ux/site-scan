@@ -755,3 +755,9 @@ banner visibility, Consent Mode, or pre-consent fires.
   vendors by source with the right fix for each; the conditional
   both-branch text only remains when no source data exists. Vendor
   list no longer repeats.
+
+## v0.15.18
+- Unreplaced-macro warning removed from pixel rows entirely - the
+  pixels track fine without those values, so it read as a problem
+  where none exists. Detection remains in scan data for any future
+  internal use.
