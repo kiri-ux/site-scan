@@ -104,7 +104,6 @@
   .ver-pill .dot{width:8px;height:8px;border-radius:50%}
   .ver-pill .dot.ok{background:var(--ok,#1F7A4D)}
   .ver-pill .dot.bad{background:var(--bad,#B3261E)}
-  .ver-pill .shared{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--velocity)}
   .st-ico{display:inline-flex;flex:none}
   .st-ico.bad{color:var(--bad,#B3261E)}
   .st-ico.mid{color:#8FA0AF}
@@ -157,9 +156,7 @@ function verBar(){
     const worst = g.items.some(x => ['misconfigured','error'].includes(x.r.verdict)
       || (x.r.products||[]).some(p => p.fired < p.expected)
       || (x.r.state_checks||[]).some(c => c.status === 'fail'));
-    const isShared = g.key === RUN_ID;
-    const tip = isShared ? ' data-tip="The run this link was created for"' : '';
-    return `<button class="ver-pill${g.key === SELECTED ? ' on' : ''}"${tip} onclick="pickRun('${g.key.replace(/'/g,"\\'")}')"><span class="dot ${worst ? 'bad' : 'ok'}"></span>${w}${isShared ? '<span class="shared">shared</span>' : ''}</button>`;
+    return `<button class="ver-pill${g.key === SELECTED ? ' on' : ''}" onclick="pickRun('${g.key.replace(/'/g,"\\'")}')"><span class="dot ${worst ? 'bad' : 'ok'}"></span>${w}</button>`;
   }).join('');
 }
 
@@ -192,9 +189,9 @@ function draw(){
       $('loading').textContent = 'Scan not found - it may have been deleted.';
       return;
     }
-    // The link's own run wins over the newest, so a report keeps
-    // showing what it showed when it was sent.
-    SELECTED = (RUNS.find(g => g.key === RUN_ID) || RUNS[0]).key;
+    // Newest run wins - a share link is a live view of the client's
+    // current state, not a snapshot of the run it was created from.
+    SELECTED = RUNS[0].key;
     draw();
     $('loading').style.display = 'none';
     $('footnote').style.display = 'block';
