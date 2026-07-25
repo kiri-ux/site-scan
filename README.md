@@ -707,3 +707,11 @@ banner visibility, Consent Mode, or pre-consent fires.
 ## v0.15.10
 - Removed the "Summary for the main site" hover from the client
   summary strip.
+
+## v0.15.11
+- The two overlapping gating items (consent-gate product pixels /
+  migrate hardcoded bypassers) merged into one: same finding, one
+  item. The fix language routes by where tags run - client GTM gets
+  the consent procedure (expander attached), hardcoded page snippets
+  get consent-wrapped or migrated. Consent-wrapped snippets are only
+  mentioned for page-code scenarios, never GTM.

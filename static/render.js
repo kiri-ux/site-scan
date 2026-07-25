@@ -99,18 +99,29 @@ function actionItemsHtml(rs, impl){
       push('CLIENT', `Recommended (not required): install a consent banner (CMP) to gate pixels and cover current and future state targeting. ${followUp2}${GTM_PROCEDURE}`);
     }
   }
-  // consent-gating for product pixels (only meaningful once a CMP exists)
-  const preOnly = [...new Set(rs.flatMap(r => (r.products||[]).filter(p => (p.pixels||[]).some(px => px.fired_pre && !px.fired_post)).map(p => p.product)))];
-  if (hasCmp && preOnly.length) push(pixOwner, `Consent-gate ${preOnly.join(', ')} - firing before consent despite the banner.` + (pixOwner==='CLIENT' ? ' Vici provides consent-wrapped snippets or GTM tag exports to reinstall.' : ''));
-
-  // hardcoded bypassers on CMP pages
-  const bypass = [...new Set(rs.flatMap(r => {
-    if (!(r.cmps||[]).length) return [];
+  // ONE gating item for everything firing around the banner: product
+  // pixels pre-consent, violations, and after-reject fires are the
+  // same finding (the CMP isn't gating them). The fix depends on WHERE
+  // the tags run - a GTM gets the consent procedure; hardcoded page
+  // snippets get consent-wrapped or migrated - not on which list the
+  // scanner caught them in.
+  const gateSet = new Set();
+  for (const r of rs){
+    if (!(r.cmps||[]).length) continue;
     const p2p = {};
     for (const p of (r.products||[])) for (const px of (p.pixels||[])) p2p[px.name] = p.product;
-    return [...(r.pre_consent||[]).filter(h => h.severity==='violation'), ...(r.post_reject||[])].map(h => p2p[h.vendor] || h.vendor);
-  }))];
-  if (bypass.length) push('CLIENT', `Migrate or consent-wrap the hardcoded pixels bypassing the CMP (${bypass.join(', ')}) - these fire from page code, so the client's web team applies the fix; Vici provides the corrected snippets (consent-default APIs or GTM migration).`);
+    for (const p of (r.products||[])) if ((p.pixels||[]).some(px => px.fired_pre && !px.fired_post)) gateSet.add(p.product);
+    for (const h of [...(r.pre_consent||[]).filter(h => h.severity==='violation'), ...(r.post_reject||[])]) gateSet.add(p2p[h.vendor] || h.vendor);
+  }
+  const gate = [...gateSet];
+  if (hasCmp && gate.length){
+    const where = pixOwner === 'VICI'
+      ? 'These run from the Vici-owned GTM, so Vici applies the consent procedure there.'
+      : pixOwner === 'CLIENT'
+      ? "If they run from the client's GTM, the client's team applies the consent procedure in that container (steps below); if hardcoded in page code, Vici provides consent-wrapped snippets or migrates them into GTM."
+      : 'If they run from a GTM, apply the consent procedure in that container (steps below); if hardcoded in page code, consent-wrap or migrate them (owner per Implementation).';
+    push(pixOwner, `Consent-gate the trackers firing around the banner (${gate.join(', ')}) - before consent or after reject, the CMP isn't gating them. ${where}${GTM_PROCEDURE}`);
+  }
 
   // consent mode defaults
   const defs = main.consent_defaults || {};
