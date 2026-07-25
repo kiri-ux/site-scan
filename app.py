@@ -133,6 +133,7 @@ def scan():
     result["client_name"] = str(data.get("client_name", ""))[:200]
     result["partner_name"] = str(data.get("partner_name", ""))[:200]
     result["category"] = str(data.get("category", ""))[:60]
+    result["implementation"] = str(data.get("implementation", ""))[:40]
     result["industries"] = [i for i in (data.get("industries") or [])
                             if i in set(INDUSTRIES)][:12]
     result["run_id"] = str(data.get("run_id", ""))[:64]
@@ -188,7 +189,8 @@ def upsert_site():
                        include_conversions, client_name, states,
                        str(data.get("partner_name", ""))[:200],
                        str(data.get("category", ""))[:60],
-                       _json_dumps_industries(data))
+                       _json_dumps_industries(data),
+                       str(data.get("implementation", ""))[:40])
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500

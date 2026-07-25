@@ -52,6 +52,63 @@ function chainLink(k, v, state){
   const tip = (CHAIN_TIPS[k] || '').replace(/"/g, '&quot;');
   return `<div class="link ${state}" data-tip="${tip}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
+function ownerBadge(owner){
+  if (owner === 'VICI') return `<span class="ob ob-vici" data-tip="Vici-side change - the buyer makes this fix directly">VICI</span>`;
+  if (owner === 'CLIENT') return `<span class="ob ob-ext" data-tip="Client/partner-side change - Vici provides the corrected snippet or spec; the client's web team installs it">CLIENT / PARTNER</span>`;
+  return `<span class="ob ob-un" data-tip="Owner depends on who manages the tags - set Implementation (Vici-owned GTM vs Client placement) on the scan form to resolve">SET IMPLEMENTATION</span>`;
+}
+
+function actionItemsHtml(rs, impl){
+  if (!rs || !rs.length) return '';
+  const pixOwner = impl === 'Vici-owned GTM' ? 'VICI' : impl === 'Client placement' ? 'CLIENT' : 'UNSET';
+  const main = rs.slice().sort((a,b) => (a.url||'').length - (b.url||'').length)[0];
+  const items = [];
+  const push = (owner, text) => items.push({owner, text});
+
+  // product pixels missing anywhere
+  const missing = [...new Set(rs.flatMap(r => (r.products||[]).filter(p => p.fired === 0).map(p => p.product)))];
+  if (missing.length) push(pixOwner, `Install or repair the ${missing.join(', ')} pixel${missing.length>1?'s':''} - expected but not seen on any scanned page.` + (pixOwner==='CLIENT' ? ' Vici supplies the pixel code.' : ''));
+
+  const hasCmp = (main.cmps||[]).length > 0;
+  // no CMP at all
+  if (!hasCmp && main.ok && main.mode === 'full'){
+    push('CLIENT', 'Choose and install a consent banner (CMP) - none detected. Vici advises on vendor selection and provides the GTM consent procedure once one is in place.');
+  }
+  // consent-gating for product pixels (only meaningful once a CMP exists)
+  const preOnly = [...new Set(rs.flatMap(r => (r.products||[]).flatMap(p => (p.pixels||[]).filter(px => px.fired_pre && !px.fired_post).map(px => px.name))))];
+  if (hasCmp && preOnly.length) push(pixOwner, `Consent-gate ${preOnly.join(', ')} - firing before consent despite the banner.` + (pixOwner==='CLIENT' ? ' Vici provides consent-wrapped snippets or GTM tag exports to reinstall.' : ''));
+
+  // hardcoded bypassers on CMP pages
+  const bypass = [...new Set(rs.flatMap(r => (r.cmps||[]).length ? [...(r.pre_consent||[]).filter(h => h.severity==='violation'), ...(r.post_reject||[])].map(h => h.vendor) : []))];
+  if (bypass.length) push('CLIENT', `Migrate or consent-wrap the hardcoded pixels bypassing the CMP (${bypass.join(', ')}) - these fire from page code, so the client's web team applies the fix; Vici provides the corrected snippets (consent-default APIs or GTM migration).`);
+
+  // consent mode defaults
+  const defs = main.consent_defaults || {};
+  const defKeys = Object.keys(defs);
+  const leaking = defKeys.filter(k => defs[k] !== 'denied');
+  if (defKeys.length && leaking.length) push(pixOwner, `Set Consent Mode defaults to denied (${leaking.join(', ')} currently granted).` + (pixOwner==='VICI' ? ' Fixable in the GTM Consent Initialization trigger.' : ' Vici provides the default-consent block; it must load above the tags.'));
+  else if (!defKeys.length && main.gtm && main.gtm.found && hasCmp) push(pixOwner, 'Add Google Consent Mode defaults (none detected) so Google tags start denied until consent.');
+
+  // reject violations already covered by bypass on CMP pages; state/site items:
+  for (const c of (main.state_checks || [])){
+    if (c.status !== 'fail') continue;
+    if (c.check === 'Privacy policy link') push('CLIENT', 'Add an accessible privacy policy link - none found on the page.');
+    if (c.check === 'Opt-out link') push('CLIENT', 'Add a "Your Privacy Choices" / opt-out link to the site footer.');
+    if (c.check === 'GPC signal') push('CLIENT', 'Honor the Global Privacy Control signal - typically CMP configuration once a banner exists' + (hasCmp ? '.' : ' (part of the CMP conversation above).'));
+    if (c.check === 'Health-context tracking' || c.check === 'Child-directed tracking') push('CLIENT', `${c.check.replace('-', ' ')} flagged - route to compliance review before continuing ad pixels on this client.`);
+  }
+  // macros: internal
+  const macros = [...new Set(rs.flatMap(r => (r.products||[]).flatMap(p => (p.pixels||[]).filter(px => px.macro_warning).map(px => px.name))))];
+  if (macros.length) push('VICI', `Fill trafficking macros on ${macros.join(', ')} - template values like [ORDER] unreplaced (internal trafficking fix).`);
+
+  if (!items.length) return '';
+  // dedupe identical opt-out/GPC lines that repeat per state group
+  const seen = new Set();
+  const rows = items.filter(it => { const k = it.owner + it.text; if (seen.has(k)) return false; seen.add(k); return true; });
+  return `<h3>Action items</h3><ul class="ai">` + rows.map(it =>
+    `<li>${ownerBadge(it.owner)}<div>${it.text}</div></li>`).join('') + `</ul>`;
+}
+
 function stateChecksHtml(r){
   if (!(r.state_checks || []).length) return '';
   // combine rows where the same check+status+detail applies to several

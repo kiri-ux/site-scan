@@ -631,3 +631,16 @@ banner visibility, Consent Mode, or pre-consent fires.
   configuration, privacy-policy checks, and the hardcoded-pixel fix
   path; core monitoring card adds privacy-policy, industry-aware
   sensitive-context flags, and Consent Mode verdicts.
+
+## v0.15.0
+- Action items: each client summary (and share page) now ends with an
+  ownership-tagged to-do list derived from the findings - VICI (blue)
+  for buyer-side fixes, CLIENT/PARTNER (gold) for site-side changes
+  where Vici provides the corrected snippet and the client installs.
+- New Implementation selector (Vici-owned GTM / Client placement)
+  drives pixel/GTM item ownership; unset shows a SET IMPLEMENTATION
+  badge. Persists through schedule, cron, Edit.
+- Rules: missing/ungated product pixels -> implementation owner; CMP
+  selection, policy/opt-out links, GPC, hardcoded-pixel migration ->
+  client/partner; trafficking macros -> Vici internal. Consent-gating
+  items appear only once a CMP exists.
