@@ -58,6 +58,8 @@ def init_db():
                 ADD COLUMN IF NOT EXISTS partner TEXT NOT NULL DEFAULT '';
             ALTER TABLE schedule
                 ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT '';
+            ALTER TABLE schedule
+                ADD COLUMN IF NOT EXISTS industries TEXT NOT NULL DEFAULT '[]';
         """)
 
 
@@ -125,7 +127,7 @@ def list_sites():
     with _conn() as cn, cn.cursor() as cur:
         cur.execute("""SELECT url, frequency, products, conversion_urls,
                               include_conversions, client_name, states,
-                              partner, category
+                              partner, category, industries
                        FROM schedule ORDER BY client_name, url""")
         return [{"url": u, "frequency": f,
                  "products": [p for p in (pr or "").split(",") if p],
@@ -134,19 +136,21 @@ def list_sites():
                  "client_name": name or "",
                  "states": [s for s in (st or "").split(",") if s],
                  "partner_name": pt or "",
-                 "category": cat or ""}
-                for u, f, pr, cv, inc, name, st, pt, cat in cur.fetchall()]
+                 "category": cat or "",
+                 "industries": __import__("json").loads(inds or "[]")}
+                for u, f, pr, cv, inc, name, st, pt, cat, inds in cur.fetchall()]
 
 
 def upsert_site(url, frequency, products="", conversion_urls="",
                 include_conversions=True, client_name="", states="",
-                partner="", category=""):
+                partner="", category="", industries="[]"):
     with _conn() as cn, cn.cursor() as cur:
         cur.execute("""
             INSERT INTO schedule (url, frequency, products,
                                   conversion_urls, include_conversions,
-                                  client_name, states, partner, category)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                  client_name, states, partner, category,
+                                  industries)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (url) DO UPDATE
                 SET frequency = EXCLUDED.frequency,
                     products = EXCLUDED.products,
@@ -155,10 +159,11 @@ def upsert_site(url, frequency, products="", conversion_urls="",
                     client_name = EXCLUDED.client_name,
                     states = EXCLUDED.states,
                     partner = EXCLUDED.partner,
-                    category = EXCLUDED.category
+                    category = EXCLUDED.category,
+                    industries = EXCLUDED.industries
         """, (url, frequency, products, conversion_urls,
               bool(include_conversions), client_name[:200], states,
-              partner[:200], category[:60]))
+              partner[:200], category[:60], industries or "[]"))
 
 
 def delete_site(url):

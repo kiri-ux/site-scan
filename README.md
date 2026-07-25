@@ -584,3 +584,13 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Every qualified matrix cell (the text ones like "integrates",
   "real users", "honor, don' test") carries a one-line hover
   explaining why it is not a plain checkmark.
+
+## v0.14.0
+- Client industries: searchable multiselect of the full 346-entry
+  partner taxonomy (as classified on order submission). Stored with
+  clients and scans, shown as header tags (2 + count), restored by
+  Edit, carried through cron. Sensitive-context checks now DERIVE
+  automatically: Health Services/Dentistry/Med Spa/etc -> Healthcare,
+  Banking/Financial/Insurance/Crypto -> Financial, Child Care/Toys ->
+  Children-directed (Insurance - Health triggers both). Manual
+  category field remains accepted for backward compatibility.

@@ -238,6 +238,13 @@
   .lp-state .lp-detail{padding:0 12px 10px;color:var(--ink)}
   .lp-state .lp-detail .cite{font-size:12px;color:var(--muted)}
   .lp-foot{border-top:1px solid var(--line);padding:10px 20px;font-size:11.5px;color:var(--muted)}
+  .ms{position:relative}
+  .ms-list{position:absolute;left:0;right:0;top:100%;z-index:400;background:#fff;border:1px solid var(--line);border-radius:0 0 8px 8px;max-height:260px;overflow-y:auto;box-shadow:0 8px 22px rgba(0,45,88,.15)}
+  .ms-item{padding:7px 12px;cursor:pointer;font-size:13.5px;display:flex;gap:8px;align-items:center}
+  .ms-item:hover{background:#EAF3FB}
+  .ms-item.sel{font-weight:600;color:var(--velocity)}
+  .ms-item .mark{width:14px;flex:none;color:var(--velocity)}
+  .ms-empty{padding:10px 12px;color:var(--muted);font-size:13px}
   .cm-stamp{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.07em;border-radius:6px;padding:4px 11px;white-space:nowrap}
   .cm-stamp.ok{background:var(--ok,#1F7A4D);color:#fff}
   .cm-stamp.bad{background:var(--bad,#B3261E);color:#fff}
@@ -282,8 +289,12 @@
     <div class="chips" id="product-chips"></div>
     <label class="field-label">State targets <span class="opt">(where this client's campaigns run - adds GPC and opt-out checks for those states)</span></label>
     <div class="chips" id="state-chips"></div>
-    <label class="field-label" style="margin-top:12px">Client category <span class="opt">(optional - adds sensitive-context checks for stricter-regulated verticals)</span></label>
-<div class="chips" id="cat-pills"></div>
+    <label class="field-label" style="margin-top:12px">Client industries <span class="opt">(as partners classify on the order - stricter-regulated industries add sensitive-context checks automatically)</span></label>
+<div class="ms" id="ind-ms">
+  <input type="text" id="ind-search" class="text-input" placeholder="Search industries..." autocomplete="off">
+  <div class="ms-list" id="ind-list" style="display:none"></div>
+</div>
+<div class="chips" id="ind-selected" style="margin-top:6px"></div>
 <div class="hint">Full scan loads each page in a headless browser, records pre-consent fires, clicks Accept, then verifies the selected products' pixels. Roughly 15&ndash;40 seconds per page.</div>
     <div class="row">
       <button class="btn-primary" id="go">Scan sites</button>
@@ -402,13 +413,33 @@ let results = [];
 
 let dbEnabled = false;
 const PRODUCTS = ['Amazon','BARCK+','LinkedIn','Meta','Mobile','PPC','Performance Max','SEO','TikTok','WVID','YouTube'];
-const CATEGORIES = ['Healthcare','Financial services','Children-directed'];
-let selectedCategory = '';
-function renderCatPills(){
-  $('cat-pills').innerHTML = CATEGORIES.map(c =>
-    `<button type="button" class="chip ${selectedCategory===c?'on':''}" onclick="toggleCategory('${c.replace(/'/g,"\\'")}')">${c}</button>`).join('');
+const INDUSTRIES = {{ industries_json|safe }};
+let selectedIndustries = [];
+function renderIndList(){
+  const q = $('ind-search').value.trim().toLowerCase();
+  const hits = INDUSTRIES.filter(i => !q || i.toLowerCase().includes(q)).slice(0, 60);
+  $('ind-list').innerHTML = hits.length
+    ? hits.map(i => `<div class="ms-item${selectedIndustries.includes(i)?' sel':''}" onclick="toggleIndustry(this)" data-ind="${i.replace(/"/g,'&quot;')}"><span class="mark">${selectedIndustries.includes(i)?'&#10003;':''}</span>${i}</div>`).join('')
+    : '<div class="ms-empty">No matching industries</div>';
 }
-function toggleCategory(c){ selectedCategory = selectedCategory === c ? '' : c; renderCatPills(); }
+function toggleIndustry(el){
+  const i = el.getAttribute('data-ind');
+  const at = selectedIndustries.indexOf(i);
+  if (at >= 0) selectedIndustries.splice(at, 1); else selectedIndustries.push(i);
+  renderIndList(); renderIndSelected();
+}
+function removeIndustry(el){
+  const i = el.getAttribute('data-ind');
+  selectedIndustries = selectedIndustries.filter(x => x !== i);
+  renderIndList(); renderIndSelected();
+}
+function renderIndSelected(){
+  $('ind-selected').innerHTML = selectedIndustries.map(i =>
+    `<button type="button" class="chip on" data-ind="${i.replace(/"/g,'&quot;')}" onclick="removeIndustry(this)" data-tip="Click to remove">${i} &times;</button>`).join('');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#ind-ms')) $('ind-list').style.display = 'none';
+});
 let selectedProducts = [];
 let convUrls = [];
 function renderConvPills(){
@@ -618,7 +649,7 @@ function editSite(i){
   const s = schedSites[i];
   $('client-name').value = s.client_name || '';
   $('partner-name').value = s.partner_name || '';
-  selectedCategory = s.category || ''; renderCatPills();
+  selectedIndustries = (s.industries || []).slice(); renderIndSelected(); renderIndList();
   $('site-url').value = s.url;
   convUrls = sanitizeConvList(s.conversion_urls); renderConvPills();
   selectedProducts = [...(s.products || [])];
@@ -627,7 +658,7 @@ function editSite(i){
   renderChips();
   renderStateChips();
   showTab('scan');
-  renderCatPills();
+  renderIndSelected();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 async function upsertClient(frequency, btn){
@@ -639,7 +670,7 @@ async function upsertClient(frequency, btn){
     body: JSON.stringify({url, frequency,
       products: selectedProducts, states: selectedStates, conversion_urls: conv,
       include_conversions: true, client_name: $('client-name').value.trim(),
-      partner_name: $('partner-name').value.trim(), category: selectedCategory})});
+      partner_name: $('partner-name').value.trim(), industries: selectedIndustries})});
   if (resp.ok && btn){
     const label = btn.textContent;
     btn.textContent = 'Saved \u2713';
@@ -739,7 +770,12 @@ function renderGroup(g, cg, verBar){
         return `<span class="pstat ${cls}">${p.product}${p.expected > 1 ? ` ${p.fired}/${p.expected}` : ''} ${p.fired === 0 ? '&#10007;' : '&#10003;'}</span>`;
       }).join('')}
       ${(mainItem(g).r.states || []).map(s => `<span class="rtag">${s}</span>`).join('')}
-      ${(() => { const c = g.items.map(x => x.r.category).find(Boolean); return c ? `<span class="rtag" data-tip="Buyer-declared client category - adds sensitive-context checks">${c}</span>` : ''; })()}
+      ${(() => {
+        const inds = g.items.map(x => x.r.industries).find(a => a && a.length) || [];
+        if (!inds.length) { const c = g.items.map(x => x.r.category).find(Boolean); return c ? `<span class="rtag">${c}</span>` : ''; }
+        const shown = inds.slice(0, 2).map(i => `<span class="rtag" data-tip="Partner-classified industry">${i.length > 26 ? i.slice(0, 24) + '&hellip;' : i}</span>`).join('');
+        return shown + (inds.length > 2 ? `<span class="rtag" data-tip="${inds.slice(2).join(', ').replace(/"/g,'&quot;')}">+${inds.length - 2}</span>` : '');
+      })()}
       <span class="scanned icon-clock" title="Most recent pull: ${when}" aria-label="Scanned ${when}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
       ${dbEnabled && !g.key.startsWith('solo-') ? `<button class="rg-del icon-btn" style="color:var(--velocity)" title="Copy a read-only link to just this scan" aria-label="Share" onclick="event.stopPropagation(); shareRun('${g.key.replace(/'/g,"\\'")}', this)">${ICONS.share}</button>` : ''}
       <button class="rg-del icon-btn" style="color:var(--velocity)" title="Load this run's client, URLs, and products back into the scan form to adjust and re-run" aria-label="Edit" onclick="event.stopPropagation(); editRun('${g.key.replace(/'/g,"\\'")}')">${ICONS.edit}</button>
@@ -780,7 +816,7 @@ function editRun(key){
   const main = mainItem(g);
   $('client-name').value = g.name || '';
   $('partner-name').value = g.items.map(x => x.r.partner_name).find(Boolean) || '';
-  selectedCategory = g.items.map(x => x.r.category).find(Boolean) || ''; renderCatPills();
+  selectedIndustries = (g.items.map(x => x.r.industries).find(a => a && a.length) || []).slice(); renderIndSelected(); renderIndList();
   $('site-url').value = main.r.url;
   convUrls = sanitizeConvList(g.items.filter(it => it !== main).map(it => it.r.url)); renderConvPills();
   // selected products = products reported on the main page (selection mode
@@ -791,7 +827,7 @@ function editRun(key){
   renderChips();
   renderStateChips();
   showTab('scan');
-  renderCatPills();
+  renderIndSelected();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
@@ -867,7 +903,7 @@ async function run(){
         const resp = await fetch('/scan', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === 0, run_id: runId, client_name: clientName, partner_name: partnerName, category: selectedCategory}),
+          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === 0, run_id: runId, client_name: clientName, partner_name: partnerName, industries: selectedIndustries}),
           signal: ctrl.signal,
         });
         clearTimeout(timer);
@@ -938,6 +974,8 @@ $('delete-all').addEventListener('click', async () => {
   localStorage.removeItem(STORE_KEY);
   render();
 });
+$('ind-search').addEventListener('focus', () => { renderIndList(); $('ind-list').style.display = 'block'; });
+$('ind-search').addEventListener('input', () => { renderIndList(); $('ind-list').style.display = 'block'; });
 $('conv-input').addEventListener('keydown', e => {
   if (e.key === 'Enter'){ e.preventDefault(); addConvUrls(e.target.value); e.target.value = ''; }
   else if (e.key === 'Backspace' && !e.target.value && convUrls.length){ convUrls.pop(); renderConvPills(); }

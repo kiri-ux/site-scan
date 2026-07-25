@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.13.12"
+SCANNER_REV = "0.14.0"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -1073,13 +1073,17 @@ def _category_checks(result, category):
 
 
 def scan_site(raw_url, prefer_full=True, products=None, states=None,
-              site_checks=True, category=None):
+              site_checks=True, category=None, industries=None):
     url = normalize_url(raw_url)
     if not url:
         r = _empty_result(raw_url or "")
         r["error"] = "Not a valid URL."
         return _apply_verdict(r)
     _cat = category if category in CATEGORIES else None
+    from industries import derive_contexts
+    _contexts = derive_contexts(industries)
+    if _cat:
+        _contexts.add(_cat)
 
     if prefer_full:
         try:
@@ -1087,7 +1091,8 @@ def scan_site(raw_url, prefer_full=True, products=None, states=None,
                                          states=states,
                                          site_checks=site_checks))
             if site_checks:
-                _category_checks(r, _cat)
+                for _c in sorted(_contexts):
+                    _category_checks(r, _c)
             return r
         except ImportError as e:
             print(f"[scan] POOL UNAVAILABLE (ImportError: {e}) - basic "

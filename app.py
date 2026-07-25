@@ -37,6 +37,7 @@ def _extract_conv_urls(chunk):
     return out
 from signatures import PRODUCT_NAMES
 from state_checks import STATE_CODES, STATE_CHECKS, LAST_REVIEWED
+from industries import INDUSTRIES, derive_contexts
 
 app = Flask(__name__)
 
@@ -109,6 +110,7 @@ def index():
     import json as _json
     return render_template("index.html", build=BUILD, deployed=DEPLOYED,
                            states_json=_json.dumps(STATE_CHECKS),
+                           industries_json=_json.dumps(INDUSTRIES),
                            states_reviewed=LAST_REVIEWED)
 
 
@@ -119,15 +121,19 @@ def scan():
                 if p in PRODUCT_NAMES]
     states = [s for s in (data.get("states") or []) if s in STATE_CODES]
     category = str(data.get("category", ""))[:60] or None
+    industries = [i for i in (data.get("industries") or [])
+                  if i in set(INDUSTRIES)][:12]
     result = scan_site(data.get("url", ""),
                        prefer_full=bool(data.get("full", True)),
                        products=products or None,
                        states=states or None,
                        site_checks=bool(data.get("site_checks", True)),
-                       category=category)
+                       category=category, industries=industries)
     result["client_name"] = str(data.get("client_name", ""))[:200]
     result["partner_name"] = str(data.get("partner_name", ""))[:200]
     result["category"] = str(data.get("category", ""))[:60]
+    result["industries"] = [i for i in (data.get("industries") or [])
+                            if i in set(INDUSTRIES)][:12]
     result["run_id"] = str(data.get("run_id", ""))[:64]
     if result["ok"]:
         try:
@@ -180,7 +186,8 @@ def upsert_site():
         db.upsert_site(url, freq, products, conversion_urls,
                        include_conversions, client_name, states,
                        str(data.get("partner_name", ""))[:200],
-                       str(data.get("category", ""))[:60])
+                       str(data.get("category", ""))[:60],
+                       _json_dumps_industries(data))
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -234,6 +241,13 @@ def api_run(run_id):
 def favicon_ico():
     # Some browsers request /favicon.ico regardless of the link tag.
     return app.redirect("/static/favicon.svg?v=2", code=302)
+
+
+def _json_dumps_industries(data):
+    import json as _j
+    inds = [i for i in (data.get("industries") or [])
+            if i in set(INDUSTRIES)][:12]
+    return _j.dumps(inds)
 
 
 @app.get("/health")

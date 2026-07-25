@@ -67,7 +67,8 @@ def load_sites():
                 sts = s.get("states") or None
                 pt = s.get("partner_name", "")
                 cat = s.get("category", "") or None
-                due.append((s["url"], prods, name, sts, True, pt, cat))
+                inds = s.get("industries") or []
+                due.append((s["url"], prods, name, sts, True, pt, cat, inds))
                 if s.get("include_conversions", True):
                     seen = {_norm(s["url"])}
                     for c in s.get("conversion_urls", []):
@@ -76,7 +77,7 @@ def load_sites():
                         if _norm(c) in seen:
                             continue
                         seen.add(_norm(c))
-                        due.append((c, prods, name, sts, False, pt, cat))
+                        due.append((c, prods, name, sts, False, pt, cat, inds))
             if due:
                 return due
             print("Schedule table has no sites due today.")
@@ -90,7 +91,7 @@ def load_sites():
     for chunk in raw.replace(",", "\n").splitlines():
         s = chunk.strip()
         if s and not s.startswith("#"):
-            sites.append((s, None, "", None, True, "", None))
+            sites.append((s, None, "", None, True, "", None, []))
     return sites
 
 
@@ -192,12 +193,13 @@ def main():
     workers = max(1, min(int(os.environ.get("SCAN_CONCURRENCY", "2")), 4))
 
     def _one(job):
-        s, prods, name, sts, main, pt, cat = job
+        s, prods, name, sts, main, pt, cat, inds = job
         r = scan_site(s, prefer_full=True, products=prods, states=sts,
-                      site_checks=main, category=cat)
+                      site_checks=main, category=cat, industries=inds)
         r["client_name"] = name
         r["partner_name"] = pt
         r["category"] = cat or ""
+        r["industries"] = inds
         return r
 
     from concurrent.futures import ThreadPoolExecutor
