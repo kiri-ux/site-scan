@@ -624,3 +624,10 @@ banner visibility, Consent Mode, or pre-consent fires.
 ## v0.14.5
 - Client industries multiselect moved up under the Client/Partner name
   row, ahead of the website field - matching order-form flow.
+
+## v0.14.6
+- Pricing cards refreshed: unfilled-macro phrase removed (internal
+  hygiene, not client-facing); setup card now covers Consent Mode
+  configuration, privacy-policy checks, and the hardcoded-pixel fix
+  path; core monitoring card adds privacy-policy, industry-aware
+  sensitive-context flags, and Consent Mode verdicts.
