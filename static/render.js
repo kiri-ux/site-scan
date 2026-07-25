@@ -100,11 +100,16 @@ function actionItemsHtml(rs, impl){
     }
   }
   // consent-gating for product pixels (only meaningful once a CMP exists)
-  const preOnly = [...new Set(rs.flatMap(r => (r.products||[]).flatMap(p => (p.pixels||[]).filter(px => px.fired_pre && !px.fired_post).map(px => px.name))))];
+  const preOnly = [...new Set(rs.flatMap(r => (r.products||[]).filter(p => (p.pixels||[]).some(px => px.fired_pre && !px.fired_post)).map(p => p.product)))];
   if (hasCmp && preOnly.length) push(pixOwner, `Consent-gate ${preOnly.join(', ')} - firing before consent despite the banner.` + (pixOwner==='CLIENT' ? ' Vici provides consent-wrapped snippets or GTM tag exports to reinstall.' : ''));
 
   // hardcoded bypassers on CMP pages
-  const bypass = [...new Set(rs.flatMap(r => (r.cmps||[]).length ? [...(r.pre_consent||[]).filter(h => h.severity==='violation'), ...(r.post_reject||[])].map(h => h.vendor) : []))];
+  const bypass = [...new Set(rs.flatMap(r => {
+    if (!(r.cmps||[]).length) return [];
+    const p2p = {};
+    for (const p of (r.products||[])) for (const px of (p.pixels||[])) p2p[px.name] = p.product;
+    return [...(r.pre_consent||[]).filter(h => h.severity==='violation'), ...(r.post_reject||[])].map(h => p2p[h.vendor] || h.vendor);
+  }))];
   if (bypass.length) push('CLIENT', `Migrate or consent-wrap the hardcoded pixels bypassing the CMP (${bypass.join(', ')}) - these fire from page code, so the client's web team applies the fix; Vici provides the corrected snippets (consent-default APIs or GTM migration).`);
 
   // consent mode defaults
@@ -246,8 +251,26 @@ function renderSite(r, i){
         ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}</div></li>`).join('') + `</ul>` : '';
 
   const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
-  const fires = r.pre_consent.length ? `<h3>Other pixels${preViol ? ` <span class="badge bad">${preViol} pre-consent</span>` : ''}</h3><ul>` + r.pre_consent.map(h =>
-      `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='ungated' ? tipAttr('ungated') : h.severity==='violation' ? tipAttr('violation') : ''}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
+  // group hits that belong to a selected product under the product name
+  // (full per-pixel detail stays in the Product pixels section)
+  const pixToProd = {};
+  for (const p of (r.products || []))
+    for (const px of (p.pixels || [])) pixToProd[px.name] = p.product;
+  const grouped = [];
+  const prodAgg = {};
+  for (const h of r.pre_consent || []){
+    const prod = pixToProd[h.vendor];
+    if (prod){
+      if (!prodAgg[prod]){ prodAgg[prod] = {vendor: prod, severity: h.severity, count: 0, agg: true}; grouped.push(prodAgg[prod]); }
+      prodAgg[prod].count++;
+      if (h.severity === 'violation') prodAgg[prod].severity = 'violation';
+    } else grouped.push(h);
+  }
+  const fires = grouped.length ? `<h3>Other pixels${preViol ? ` <span class="badge bad">${preViol} pre-consent</span>` : ''}</h3><ul>` + grouped.map(h =>
+      h.agg
+      ? `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='violation' ? tipAttr('violation') : tipAttr('ungated')}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
+        <div><b>${h.vendor}</b> <span class="evidence">${h.count} component pixel${h.count>1?'s':''} - per-pixel detail in Product pixels above</span></div></li>`
+      : `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='ungated' ? tipAttr('ungated') : h.severity==='violation' ? tipAttr('violation') : ''}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
         <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Other pixels</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 

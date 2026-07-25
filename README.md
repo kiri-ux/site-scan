@@ -695,3 +695,11 @@ banner visibility, Consent Mode, or pre-consent fires.
   Consent Initialization trigger, CMP integration, Google tag checks,
   non-Google consent gating, publish + re-scan verification). The item
   stays one line until opened; renders on share pages too.
+
+## v0.15.9
+- Product component pixels group under the product name everywhere
+  EXCEPT the Product pixels section (which keeps full per-pixel
+  detail): Other pixels shows one aggregate row ("BARCK+ - 5 component
+  pixels - detail above"), action-item gating and hardcoded-bypass
+  lists name the product, and category checks already grouped
+  (v0.15.7). Non-product trackers still list individually.
