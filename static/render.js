@@ -274,15 +274,14 @@ function chainFor(r, opts){
       ${noCmp ? '' : chainLink('Banner visible', fmt(r.banner_visible), bannerState)}
       ${noCmp && r.consent_mode_default !== true ? '' : chainLink('Consent Mode default', fmt(r.consent_mode_default), cmState)}
       ${chainLink('Pre-consent trackers', fireLabel, fireState)}
-      ${chainLink('Product pixels', prodLabel, prodState)}
       ${noCmp ? '' : chainLink('Reject honored', rejLabel, rejState)}
+      ${chainLink('Product pixels', prodLabel, prodState)}
       ${withStates && (r.states||[]).length ? chainLink('State checks', scLabel, scState) : ''}
     </div>`;
 }
 
 function renderSite(r, i){
   const meta = VERDICT_META[r.verdict] || VERDICT_META.error;
-  const cmpNames = r.cmps.map(c => c.name).join(', ');
   const prods = r.products || [];
   const chain = chainFor(r, {states: false});
 
@@ -376,7 +375,6 @@ function renderSite(r, i){
     <div class="site-head" onclick="this.parentElement.classList.toggle('open')">
       ${headBadges}
       <span class="site-url">${r.url}</span>
-      ${cmpNames ? `<span class="cmp-name">${cmpNames}</span>` : ''}
       ${prodStat}
       <span class="scanned">${r.scanned_local || r.scanned_at || ''}</span>
       <span class="caret">&#9654;</span>
