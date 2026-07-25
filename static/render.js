@@ -338,17 +338,31 @@ function renderSite(r, i){
     : (r.mode === 'full' && r.ok ? `<h3>Other pixels</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
   const hasCmp = (r.cmps || []).length > 0;
-  const pxBadge = px => !px.fired_pre && !px.fired_post
-        ? (px.configured === true
-            ? `<span class="badge warn"${tipAttr('configured-silent')}>configured, not firing</span>`
-            : px.configured === false
-            ? `<span class="badge bad"${tipAttr('not found')}>not found</span>`
-            : `<span class="badge bad"${tipAttr('not seen')}>not seen</span>`)
-        : px.fired_pre && !px.fired_post
-        ? (hasCmp
-            ? `<span class="badge warn"${tipAttr('pre-consent only')}>pre-consent only</span>`
-            : `<span class="badge neutral"${tipAttr('ungated-pixel')}>ungated</span>`)
-        : (px.fired_pre ? `<span class="badge ok"${tipAttr('pre + post')}>pre + post</span>` : `<span class="badge ok"${tipAttr('post-consent')}>post-consent</span>`);
+  // A product pixel firing pre-consent is the same finding as any
+  // other tracker doing it, so grade it with the scanner's severity
+  // rather than a separate product-only scale. pre_consent is sorted
+  // worst-first, so the first hit per vendor is the one that counts.
+  const preHit = {};
+  for (const h of (r.pre_consent || []))
+    if (!(h.vendor in preHit)) preHit[h.vendor] = h;
+  const pxBadge = px => {
+    if (!px.fired_pre && !px.fired_post)
+      return px.configured === true
+        ? `<span class="badge warn"${tipAttr('configured-silent')}>configured, not firing</span>`
+        : px.configured === false
+        ? `<span class="badge bad"${tipAttr('not found')}>not found</span>`
+        : `<span class="badge bad"${tipAttr('not seen')}>not seen</span>`;
+    const sev = px.fired_pre ? (preHit[px.name] || {}).severity : null;
+    if (sev === 'violation') return `<span class="badge bad"${tipAttr('violation')}>violation</span>`;
+    if (sev === 'warn') return `<span class="badge warn">warn</span>`;
+    if (sev === 'info') return `<span class="badge neutral">info</span>`;
+    if (sev === 'ungated') return `<span class="badge neutral"${tipAttr('ungated-pixel')}>ungated</span>`;
+    return px.fired_pre && !px.fired_post
+      ? (hasCmp
+          ? `<span class="badge warn"${tipAttr('pre-consent only')}>pre-consent only</span>`
+          : `<span class="badge neutral"${tipAttr('ungated-pixel')}>ungated</span>`)
+      : (px.fired_pre ? `<span class="badge ok"${tipAttr('pre + post')}>pre + post</span>` : `<span class="badge ok"${tipAttr('post-consent')}>post-consent</span>`);
+  };
   const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>Product pixels</h3>` + (prods.length ? prods.map(p => {
       const stateBadge = p.fired === 0 ? `<span class="badge bad"${tipAttr('missing')}>missing</span>`
                        : p.fired < p.expected ? `<span class="badge warn"${tipAttr('partial')}>partial</span>`
@@ -356,7 +370,11 @@ function renderSite(r, i){
       const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected}</span>` : '';
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
-        `<li>${pxBadge(px)}<div><b>${px.name}</b>${srcTag(px.src, px.containers)}${px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}</span>` : ''}
+        `<li>${pxBadge(px)}<div><b>${px.name}</b>${srcTag(px.src, px.containers)}${(() => {
+          const sev = px.fired_pre ? (preHit[px.name] || {}).severity : null;
+          if (sev === 'warn' || sev === 'info') return ` <span class="evidence">${preHit[px.name].note}</span>`;
+          return px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}</span>` : '';
+        })()}
          ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></div>`;
     }).join('')
     : `<p class="kv">${r.accept_clicked ? 'No product pixels observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';
