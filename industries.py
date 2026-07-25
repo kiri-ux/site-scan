@@ -185,10 +185,13 @@ SENSITIVE_RULES = {
         "triggers": list(_HEALTH_PREFIXES),
         "kind": "prefix",
         "basis": "Most state privacy laws treat health data as sensitive, "
-                 "requiring OPT-IN consent (not just an opt-out); WA My "
-                 "Health My Data goes further with a private right of "
-                 "action. FTC actions (GoodRx, BetterHelp) and the hospital "
-                 "pixel litigation wave target ad pixels on health pages.",
+                 "requiring OPT-IN consent (not just an opt-out). Washington "
+                 "and Nevada go further with separate consumer-health-data "
+                 "laws - WA My Health My Data carries a private right of "
+                 "action - which are health-specific and sit outside the "
+                 "State targets list above. FTC actions (GoodRx, BetterHelp) "
+                 "and the hospital pixel litigation wave target ad pixels on "
+                 "health pages.",
         "scanner": "Fails when ad/analytics trackers fire ungated on a "
                    "declared health-context site; warns even when gated, "
                    "because sensitive-data opt-in quality needs review.",
