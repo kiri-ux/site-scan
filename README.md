@@ -774,3 +774,11 @@ banner visibility, Consent Mode, or pre-consent fires.
   both would appear - defaults are step 1 of the attached procedure,
   so it was the same work listed twice. The standalone defaults item
   survives when no gating item fires.
+
+## v0.15.21
+- Consent Mode verdict (stamp + note + container IDs) moved to the
+  client summary - site-level facts stated once instead of repeating
+  on every page row. Page rows keep their GTM ID line for reference.
+- The per-page "Likely hardcoded pixels" fix note retired: the gating
+  action item with detected sources and the attached procedure now
+  carries that content authoritatively.

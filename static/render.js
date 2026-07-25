@@ -66,6 +66,27 @@ function srcTag(s){
   return '';
 }
 
+function cmBlock(r){
+  // Consent Mode verdict - site-level, rendered once in the client
+  // summary rather than per page
+  const defaults = Object.entries(r.consent_defaults || {}).sort();
+  let stamp = '', note = '';
+  if (defaults.length) {
+    const granted = defaults.filter(([k, v]) => v !== 'denied').map(([k]) => k);
+    stamp = granted.length
+      ? `<span class="cm-stamp bad"${tipAttr('defaults')}>&#10007; INCORRECT SETUP</span>`
+      : `<span class="cm-stamp ok"${tipAttr('defaults')}>&#10003; CORRECT SETUP</span>`;
+    note = granted.length
+      ? `<div class="cm-note warn">&#9888; <b>${granted.join(', ')}</b> ${granted.length > 1 ? 'are' : 'is'} granted by default - Google tags can track before the visitor consents. The target setup starts every storage type <b>denied</b> and flips to granted on Accept (this is what the GTM consent procedure installs).</div>`
+      : `<div class="cm-note ok">&#10003; Correct setup: every storage type starts <b>denied</b>, so Google tags run cookieless until the visitor accepts - exactly the Consent Mode configuration the GTM consent procedure installs. No consent work needed here.</div>`;
+  } else if (r.gtm && r.gtm.found && (r.cmps||[]).length) {
+    stamp = `<span class="cm-stamp bad">&#10007; NOT CONFIGURED</span>`;
+    note = `<div class="cm-note warn">&#9888; No Consent Mode defaults detected in the GTM/gtag setup - Google tags likely run at full capability before consent even though a CMP is present. The GTM consent procedure installs denied-by-default settings.</div>`;
+  }
+  if (!stamp && !note) return '';
+  return `<div style="display:flex;gap:14px;align-items:center;margin-bottom:6px">${stamp}${(r.gtm && (r.gtm.container_ids||[]).length) ? `<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ')}</b></span>` : ''}</div>${note}`;
+}
+
 function ownerBadge(owner){
   if (owner === 'VICI') return `<span class="ob ob-vici" data-tip="Vici-side change - the buyer makes this fix directly">VICI</span>`;
   if (owner === 'CLIENT') return `<span class="ob ob-ext" data-tip="Client-side change - Vici provides the corrected snippet or spec; the client's web team installs it">CLIENT</span>`;
@@ -272,25 +293,6 @@ function renderSite(r, i){
   const defaults = Object.entries(r.consent_defaults || {});
   if (defaults.length) kvBits.push(`<span class="kv"${tipAttr('defaults')}>Defaults: <b>${defaults.map(([k,v])=>`${k}=${v}`).join(', ')}</b></span>`);
 
-  // correctness note under the Defaults line: denied-by-default is the
-  // target Consent Mode setup; granted-by-default means Google tags
-  // track before consent; no defaults at all (with GTM + a CMP) means
-  // Consent Mode likely isn't configured.
-  let cmNote = '';
-  let cmStamp = '';
-  if (defaults.length) {
-    const granted = defaults.filter(([k, v]) => v !== 'denied').map(([k]) => k);
-    cmStamp = granted.length
-      ? `<span class="cm-stamp bad"${tipAttr('defaults')}>&#10007; INCORRECT SETUP</span>`
-      : `<span class="cm-stamp ok"${tipAttr('defaults')}>&#10003; CORRECT SETUP</span>`;
-    cmNote = granted.length
-      ? `<div class="cm-note warn">&#9888; <b>${granted.join(', ')}</b> ${granted.length > 1 ? 'are' : 'is'} granted by default - Google tags can track before the visitor consents. The target setup starts every storage type <b>denied</b> and flips to granted on Accept (this is what the GTM consent procedure installs).</div>`
-      : `<div class="cm-note ok">&#10003; Correct setup: every storage type starts <b>denied</b>, so Google tags run cookieless until the visitor accepts - exactly the Consent Mode configuration the GTM consent procedure installs. No consent work needed here.</div>`;
-  } else if (r.gtm && r.gtm.found && r.cmps.length) {
-    cmStamp = `<span class="cm-stamp bad">&#10007; NOT CONFIGURED</span>`;
-    cmNote = `<div class="cm-note warn">&#9888; No Consent Mode defaults detected in this page's GTM/gtag setup - Google tags likely run at full capability before consent even though a CMP is present. The GTM consent procedure installs denied-by-default settings.</div>`;
-  }
-
   const cmpDetail = r.cmps.length ? `<h3>CMP evidence</h3><ul>` + r.cmps.map(c =>
       `<li><div><b>${c.name}</b> <span class="evidence"${tipAttr('cmp-evidence')}>${(c.evidence||[]).join(' &middot; ')}</span>
         ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}</div></li>`).join('') + `</ul>` : '';
@@ -347,27 +349,6 @@ function renderSite(r, i){
   // hardcoded-pixel remediation: when a page HAS a CMP but pixels fire
   // before consent or after reject, they're bypassing it - almost
   // always hardcoded in the page <head>. Offer the three fix paths,
-  // tailored to the vendors actually caught.
-  const bypassers = [...(r.pre_consent || []).filter(h => h.severity === 'violation'),
-                     ...(r.post_reject || [])];
-  let fixNote = '';
-  if (r.cmps.length && bypassers.length) {
-    const vendors = [...new Set(bypassers.map(h => h.vendor))];
-    const hasMeta = vendors.some(v => /meta|facebook/i.test(v));
-    const hasGoogle = vendors.some(v => /google|doubleclick|floodlight|analytics/i.test(v));
-    const specifics = [
-      hasGoogle ? `Google tags: set <code>gtag('consent','default',{ad_storage:'denied',analytics_storage:'denied',...})</code> BEFORE the tag loads; the CMP sends the 'update' to granted on Accept.` : '',
-      hasMeta ? `Meta Pixel: call <code>fbq('consent','revoke')</code> before <code>init</code>; the CMP calls <code>fbq('consent','grant')</code> on Accept.` : '',
-    ].filter(Boolean);
-    fixNote = `<div class="cm-note warn"><b>Likely hardcoded pixels bypassing the CMP</b> (${vendors.join(', ')}). Fix paths, in order of preference:
-      <ol style="margin:6px 0 0 18px;padding:0">
-        <li>Move the pixels into GTM and apply the GTM consent procedure - triggers then respect consent automatically (this is what the consent setup covers).</li>
-        <li>Native consent APIs in the hardcoded snippets: ${specifics.length ? specifics.join(' ') : 'set the vendor\u2019s consent-default API to denied before the tag initializes, updated to granted by the CMP.'} The default MUST appear above the pixel code.</li>
-        <li>CMP script-blocking: change the snippet to <code>type="text/plain"</code> with the CMP's category attribute so it only executes after opt-in.</li>
-      </ol>
-      Re-scan after any fix - the before/after pair is the verification.</div>`;
-  }
-
   const rejFires = (r.post_reject || []).length ? `<h3>Requests after Reject</h3><ul>` + r.post_reject.map(h =>
       `<li><span class="badge ${h.severity==='violation'?'bad':'warn'}">${h.severity}</span>
         <div><b>${h.vendor}</b>${srcTag(h.src)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
@@ -402,9 +383,8 @@ function renderSite(r, i){
     </div>
     <div class="site-body">
       ${r.verdict === 'error' || r.mode !== 'full' ? `<div class="verdict ${meta.cls}">${(r.verdict_lines && r.verdict_lines.length ? r.verdict_lines : [r.verdict_detail || r.error || '']).map(l => `<div class="vline">${l}</div>`).join('')}</div>` : ''}
-      ${kvBits.length || cmStamp ? `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;align-items:center">${cmStamp}${kvBits.join('')}</div>` : ''}
-      ${cmNote}
-      <div class="detail">${cmpDetail}${rejFires}${fixNote}${dspDetail}${fires}${gated}</div>
+      ${kvBits.length ? `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;align-items:center">${kvBits.join('')}</div>` : ''}
+      <div class="detail">${cmpDetail}${rejFires}${dspDetail}${fires}${gated}</div>
     </div>
   </div>`;
 }
