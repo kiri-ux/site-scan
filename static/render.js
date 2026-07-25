@@ -139,9 +139,6 @@ function actionItemsHtml(rs, impl){
     if (c.check === 'Health-context tracking') push('CLIENT', "Get a documented decision from the client's legal/compliance owner on whether ad pixels may run on this site, and on which pages. Pixel payloads include page URLs, so on a health-context site the ad platforms receive health-related browsing data - sensitive data requiring OPT-IN consent in most states. Their options: run as-is, restrict pixels to non-sensitive pages, opt-in gate them, or remove them. Vici supplies this report as the evidence and implements whatever they decide.");
     if (c.check === 'Child-directed tracking') push('CLIENT', "Get a documented decision from the client's legal/compliance owner before any trackers run on this child-directed site - COPPA requires verifiable parental consent (a banner doesn't satisfy it), and behavioral advertising to children is the FTC's most enforced tracking rule. Default recommendation: remove ad trackers entirely; Vici implements whatever they decide.");
   }
-  // macros: internal
-  const macros = [...new Set(rs.flatMap(r => (r.products||[]).flatMap(p => (p.pixels||[]).filter(px => px.macro_warning).map(px => px.name))))];
-  if (macros.length) push('VICI', `Fill trafficking macros on ${macros.join(', ')} - template values like [ORDER] unreplaced (internal trafficking fix).`);
 
   if (!items.length) return '';
   // dedupe identical opt-out/GPC lines that repeat per state group

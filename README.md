@@ -723,3 +723,8 @@ banner visibility, Consent Mode, or pre-consent fires.
   health browsing data), the legal bar (opt-in for sensitive data;
   COPPA parental consent), the concrete options, and Vici role
   (evidence + implementation, not the decision).
+
+## v0.15.13
+- Trafficking-macro action item removed - internal hygiene that would
+  confuse clients/partners in a shared report. The per-pixel macro
+  warning stays visible in the Product pixels detail for buyers.
