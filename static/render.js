@@ -249,7 +249,9 @@ function actionItemsHtml(rs, impl){
     if (c.status !== 'fail') continue;
     if (c.check === 'Privacy policy link') push('CLIENT', 'Add an accessible privacy policy link - none found on the page.', 60);
     if (c.check === 'Opt-out link' && !mechFail) push('CLIENT', 'Add a "Your Privacy Choices" / opt-out link to the site footer.', 60);
-    if (c.check === 'GPC signal') push('CLIENT', 'Honor the Global Privacy Control signal - typically CMP configuration once a banner exists' + (hasCmp ? '.' : ' (part of the CMP conversation above).'), 60);
+    if (c.check === 'GPC signal') push('CLIENT', hasCmp
+      ? 'Honor the Global Privacy Control signal - usually a setting in the consent banner already on the site.'
+      : 'Honor the Global Privacy Control signal - the consent banner above delivers this once it is installed.', 60);
     if (c.check === 'Health-context tracking') push('CLIENT', "Get a documented decision from the client's legal/compliance owner on whether ad pixels may run on this site, and on which pages. Pixel payloads include page URLs, so on a health-context site the ad platforms receive health-related browsing data - sensitive data requiring OPT-IN consent in most states. Their options: run as-is, restrict pixels to non-sensitive pages, opt-in gate them, or remove them. Vici supplies this report as the evidence and implements whatever they decide.", 70);
     if (c.check === 'Child-directed tracking') push('CLIENT', "Get a documented decision from the client's legal/compliance owner before any trackers run on this child-directed site - COPPA requires verifiable parental consent (a banner doesn't satisfy it), and behavioral advertising to children is the FTC's most enforced tracking rule. Default recommendation: remove ad trackers entirely; Vici implements whatever they decide.", 70);
   }
