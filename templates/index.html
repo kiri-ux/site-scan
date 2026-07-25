@@ -120,6 +120,10 @@
   .icon-btn:hover{background:#EAF0F5}
   .icon-btn svg{display:block}
   .ver-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  .ver-item{display:inline-flex;align-items:center;gap:2px}
+  .vp-x{border:none;background:none;color:var(--muted);cursor:pointer;font:600 15px 'Barlow',sans-serif;line-height:1;padding:2px 5px;border-radius:50%;visibility:hidden}
+  .ver-item:hover .vp-x{visibility:visible}
+  .vp-x:hover{background:var(--bad-bg,#F9E7E5);color:var(--bad,#B3261E)}
   .ver-pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:#fff;border-radius:16px;padding:5px 13px;font:500 12.5px 'Barlow',sans-serif;color:var(--muted);cursor:pointer}
   .ver-pill.on{border-color:var(--velocity);color:var(--atlas);background:#EAF3FB;font-weight:600}
   .ver-pill .dot{width:8px;height:8px;border-radius:50%}
@@ -787,7 +791,8 @@ function renderClient(cg){
   const verBar = runs.length > 1 ? `<div class="ver-bar">${runs.map(g => {
       const w = g.items[0].r.scanned_local || g.items[0].r.scanned_at || '';
       const worst = g.items.some(x => ['misconfigured','error'].includes(x.r.verdict) || (x.r.products||[]).some(p => p.fired < p.expected) || (x.r.state_checks||[]).some(c => c.status === 'fail'));
-      return `<button class="ver-pill${g.key === sel.key ? ' on' : ''}" onclick="event.stopPropagation(); pickVersion('${cg.ck.replace(/'/g,"\\'")}','${g.key.replace(/'/g,"\\'")}')"><span class="dot ${worst ? 'bad' : 'ok'}"></span>${w}</button>`;
+      const k = g.key.replace(/'/g,"\\'");
+      return `<span class="ver-item"><button class="ver-pill${g.key === sel.key ? ' on' : ''}" onclick="event.stopPropagation(); pickVersion('${cg.ck.replace(/'/g,"\\'")}','${k}')"><span class="dot ${worst ? 'bad' : 'ok'}"></span>${w}</button><button class="vp-x" title="Delete this run" aria-label="Delete the ${w} run" onclick="event.stopPropagation(); deleteGroup('${k}')">&times;</button></span>`;
     }).join('')}</div>` : '';
   return renderGroup(sel, cg, verBar);
 }
@@ -886,7 +891,8 @@ async function deleteGroup(key){
   const g = groupRuns().find(x => x.key === key);
   if (!g) return;
   const label = g.name || g.items[0].r.url;
-  if (!confirm(`Delete this scan of ${label} (${g.items.length} page${g.items.length>1?'s':''})?`)) return;
+  const when = g.items[0].r.scanned_local || g.items[0].r.scanned_at || '';
+  if (!confirm(`Delete the ${when} run of ${label} (${g.items.length} page${g.items.length>1?'s':''})?\n\nOther runs for this client are kept.`)) return;
   const ids = g.items.map(({r}) => r._id).filter(id => id != null);
   if (dbEnabled && ids.length){
     await fetch('/scans/delete', {method:'POST', headers:{'Content-Type':'application/json'},
