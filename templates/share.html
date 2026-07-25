@@ -185,7 +185,7 @@ function draw(){
   $('title').style.display = 'flex';
   $('pages').innerHTML =
     `<div class="site open"><div class="site-body">${chainFor(main.r, {states: false})}<div class="detail">${cmBlock(main.r)}${cmpEvidenceHtml(main.r)}${stateChecksHtml(main.r)}${actionItemsHtml(items.map(i => i.r), main.r.implementation || '')}</div></div></div>`
-    + items.map(({r, i}) => renderSite(r, i, (main.r.cmps || []).map(c => c.name))).join('');
+    + items.map(({r, i}) => renderSite(r, i, main.r)).join('');
 }
 
 (async function(){

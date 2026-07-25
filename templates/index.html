@@ -834,7 +834,7 @@ function renderGroup(g, cg, verBar){
         if (!impl) { const mu = normUrl(mainItem(g).r.url); const s = (schedSites || []).find(x => normUrl(x.url) === mu); impl = s && s.implementation || ''; }
         return actionItemsHtml(g.items.map(x => x.r), impl);
       })()}</div></div>
-      ${(() => { const sn = (mainItem(g).r.cmps || []).map(c => c.name); return g.items.map(({r, i}) => renderSite(r, i, sn)).join(''); })()}
+      ${(() => { const sr = mainItem(g).r; return g.items.map(({r, i}) => renderSite(r, i, sr)).join(''); })()}
     </div>
   </div>`;
 }

@@ -209,7 +209,15 @@ function actionItemsHtml(rs, impl){
     const defs = main.consent_defaults || {};
     const defKeys = Object.keys(defs);
     const leaking = defKeys.filter(k => defs[k] !== 'denied');
-    if (defKeys.length && leaking.length) push(pixOwner, `Set Consent Mode defaults to denied (${leaking.join(', ')} currently granted).` + (pixOwner==='VICI' ? ' Fixable in the GTM Consent Initialization trigger.' : ' Vici provides the default-consent block; it must load above the tags.'));
+    const where = pixOwner === 'VICI'
+      ? ' Fixable in the GTM Consent Initialization trigger.'
+      : ' Vici provides the default-consent block; it must load above the tags.';
+    if (defKeys.length && leaking.length && hasCmp)
+      push(pixOwner, `Set Consent Mode defaults to denied (${leaking.join(', ')} currently granted).` + where);
+    else if (defKeys.length && leaking.length)
+      // No banner means nothing would ever grant consent, so denied
+      // defaults would leave the Google tags limited indefinitely.
+      push(pixOwner, `Set Consent Mode defaults to denied when the consent banner goes in - not before (${leaking.join(', ')} currently granted). With no banner to grant consent, denied defaults would leave Google tags running cookieless indefinitely, so the two changes ship together.` + where);
     else if (!defKeys.length && main.gtm && main.gtm.found && hasCmp) push(pixOwner, 'Add Google Consent Mode defaults (none detected) so Google tags start denied until consent.');
   }
 
@@ -327,17 +335,23 @@ function chainFor(r, opts){
     </div>`;
 }
 
-function renderSite(r, i, siteCmpNames){
+function renderSite(r, i, site){
   const meta = VERDICT_META[r.verdict] || VERDICT_META.error;
   const prods = r.products || [];
   const chain = chainFor(r, {states: false});
 
   const kvBits = [];
   if (r.gtm && r.gtm.found) kvBits.push(`<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ') || 'present'}</b></span>`);
-  const defaults = Object.entries(r.consent_defaults || {});
-  if (defaults.length) kvBits.push(`<span class="kv"${tipAttr('defaults')}>Defaults: <b>${defaults.map(([k,v])=>`${k}=${v}`).join(', ')}</b></span>`);
+  // Consent Mode defaults are stated once in the client summary; the
+  // page only speaks up when its own defaults differ.
+  const defStr = o => Object.entries(o || {}).sort().map(([k, v]) => `${k}=${v}`).join(', ');
+  const mineDef = defStr(r.consent_defaults), siteDef = site ? defStr(site.consent_defaults) : mineDef;
+  if (mineDef !== siteDef)
+    kvBits.push(`<span class="kv"${tipAttr('defaults')}>Consent Mode defaults differ on this page: <b>${mineDef || 'none'}</b></span>`);
+  else if (!site && mineDef)
+    kvBits.push(`<span class="kv"${tipAttr('defaults')}>Defaults: <b>${mineDef}</b></span>`);
 
-  const cmpDetail = cmpDiffHtml(r, siteCmpNames);
+  const cmpDetail = cmpDiffHtml(r, site && (site.cmps || []).map(c => c.name));
 
   const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
   // group hits that belong to a selected product under the product name
