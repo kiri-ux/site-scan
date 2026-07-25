@@ -728,3 +728,8 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Trafficking-macro action item removed - internal hygiene that would
   confuse clients/partners in a shared report. The per-pixel macro
   warning stays visible in the Product pixels detail for buyers.
+
+## v0.15.14
+- Info hover glyph redrawn as a clean 13px circled-i badge (CSS
+  circle, Barlow lowercase i) - the unicode &#9432; rendered wonky
+  next to condensed uppercase labels.

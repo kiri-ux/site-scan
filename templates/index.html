@@ -129,7 +129,7 @@
   .prodflat{margin:0 0 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
   .prodhead{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px dashed var(--line);font-size:14px}
   .prodflat ul{padding:4px 12px 8px}
-  .info{color:var(--velocity);font-size:12px;cursor:help;font-weight:400}
+  .info{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;border:1.5px solid var(--velocity);color:var(--velocity);font:600 9px/1 'Barlow',sans-serif;cursor:help;vertical-align:1px;text-transform:lowercase;letter-spacing:0}
   .field-label{display:block;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--atlas);margin:14px 0 6px}
   .field-label:first-of-type{margin-top:0}
   .field-label .opt{font-family:'Barlow',sans-serif;text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);font-size:12.5px}
@@ -287,17 +287,17 @@
         <input id="client-name" type="text" class="text-input" placeholder="Town &amp; Country Ford">
       </div>
       <div>
-        <label class="field-label" for="partner-name" data-tip="The agency this client belongs to">Partner name <span class="info">&#9432;</span></label>
+        <label class="field-label" for="partner-name" data-tip="The agency this client belongs to">Partner name <span class="info">i</span></label>
         <input id="partner-name" type="text" class="text-input" placeholder="Larsen Media Group">
       </div>
     </div>
-    <label class="field-label" style="margin-top:12px" data-tip="As partners classify on the order - stricter-regulated industries add sensitive-context checks automatically">Client industries <span class="info">&#9432;</span></label>
+    <label class="field-label" style="margin-top:12px" data-tip="As partners classify on the order - stricter-regulated industries add sensitive-context checks automatically">Client industries <span class="info">i</span></label>
 <div class="ms" id="ind-ms">
   <input type="text" id="ind-search" class="text-input" placeholder="Search industries..." autocomplete="off">
   <div class="ms-list" id="ind-list" style="display:none"></div>
 </div>
 <div class="chips" id="ind-selected" style="margin-top:6px"></div>
-    <label class="field-label" style="margin-top:12px" for="impl-select" data-tip="Who manages this client's tags - drives action-item ownership (Vici-owned GTM = buyer fixes directly; Client placement = Vici provides code, client installs)">Implementation <span class="info">&#9432;</span></label>
+    <label class="field-label" style="margin-top:12px" for="impl-select" data-tip="Who manages this client's tags - drives action-item ownership (Vici-owned GTM = buyer fixes directly; Client placement = Vici provides code, client installs)">Implementation <span class="info">i</span></label>
     <select id="impl-select" class="text-input" style="max-width:340px">
       <option value="">&mdash; Not set &mdash;</option>
       <option value="Vici-owned GTM">Vici-owned GTM</option>
@@ -305,13 +305,13 @@
     </select>
     <label class="field-label" for="site-url">Client website</label>
     <input id="site-url" type="text" class="text-input" placeholder="clientsite.com">
-    <label class="field-label" data-tip="Optional - landing pages, thank-you pages. Type or paste, Enter to add" for="conv-input">Conversion URLs to check <span class="info">&#9432;</span></label>
+    <label class="field-label" data-tip="Optional - landing pages, thank-you pages. Type or paste, Enter to add" for="conv-input">Conversion URLs to check <span class="info">i</span></label>
     <div class="pillbox" id="conv-pillbox" onclick="document.getElementById('conv-input').focus()">
       <input id="conv-input" type="text" placeholder="clientsite.com/thank-you">
     </div>
-    <label class="field-label" data-tip="Select what this client runs - unselected products are still detected if seen">Products <span class="info">&#9432;</span></label>
+    <label class="field-label" data-tip="Select what this client runs - unselected products are still detected if seen">Products <span class="info">i</span></label>
     <div class="chips" id="product-chips"></div>
-    <label class="field-label" data-tip="Where this client's campaigns run - adds GPC and opt-out checks for those states">State targets <span class="info">&#9432;</span></label>
+    <label class="field-label" data-tip="Where this client's campaigns run - adds GPC and opt-out checks for those states">State targets <span class="info">i</span></label>
     <div class="chips" id="state-chips"></div>
 <div class="hint">Full scan loads each page in a headless browser, records pre-consent fires, clicks Accept, then verifies the selected products' pixels. Roughly 15&ndash;40 seconds per page.</div>
     <div class="row">
