@@ -185,7 +185,13 @@ function actionItemsHtml(rs, impl){
     } else {
       body = `${gate.join(', ')}. If they run from a GTM, apply the consent procedure in that container (steps below); if hardcoded in page code, consent-wrap or migrate them${pixOwner === 'UNSET' ? ' (owner per Implementation)' : ''}.`;
     }
-    push(pixOwner, `Consent-gate the trackers firing around the banner - the CMP isn't gating them: ${body}${GTM_PROCEDURE}`);
+    // Why it matters depends on whether state targeting is set. With no
+    // states we describe what the scan found, never what the law says.
+    const gStates = main.states || [];
+    const why = gStates.length
+      ? ` Flagged for ${gStates.join(' & ')} targeting, where a resident's opt-out has to take effect.`
+      : ' No states are selected for this client, so this is not flagged as a state-law requirement. It still matters: the banner offers Reject and these trackers fire anyway.';
+    push(pixOwner, `Consent-gate the trackers firing around the banner - the CMP isn't gating them: ${body}${body.endsWith('.') ? '' : '.'}${why}${GTM_PROCEDURE}`);
     var gatePushed = true;
   }
 
