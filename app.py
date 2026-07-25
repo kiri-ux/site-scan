@@ -233,11 +233,21 @@ def share_run(run_id):
 
 @app.get("/api/run/<run_id>")
 def api_run(run_id):
+    # Returns the whole client's scan history so the share page can
+    # offer the same run pills as the dashboard. run_id comes back so
+    # the page knows which run the link was actually created for and
+    # can select it rather than defaulting to the newest.
     try:
-        return jsonify({"results": db.scans_for_run(run_id)})
+        return jsonify({"results": db.scans_for_run_client(run_id),
+                        "run_id": run_id})
+    except Exception as e:
+        print(f"api_run client history failed: {e}")
+    try:  # never let a share link 404 - fall back to the single run
+        return jsonify({"results": db.scans_for_run(run_id),
+                        "run_id": run_id})
     except Exception as e:
         print(f"api_run failed: {e}")
-        return jsonify({"results": []})
+        return jsonify({"results": [], "run_id": run_id})
 
 
 @app.get("/favicon.ico")

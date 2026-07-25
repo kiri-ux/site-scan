@@ -98,6 +98,17 @@
   .src-tag{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:10.5px;letter-spacing:.06em;border-radius:4px;padding:1px 6px;vertical-align:1px;cursor:help}
   .src-tag.gtm{border:1.5px solid var(--velocity);color:var(--velocity)}
   .src-tag.page{border:1.5px solid var(--atlas);color:var(--atlas);background:#FBF3DC}
+  .ver-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .ver-pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:#fff;border-radius:16px;padding:5px 13px;font:500 12.5px 'Barlow',sans-serif;color:var(--muted);cursor:pointer}
+  .ver-pill.on{border-color:var(--velocity);color:var(--atlas);background:#EAF3FB;font-weight:600}
+  .ver-pill .dot{width:8px;height:8px;border-radius:50%}
+  .ver-pill .dot.ok{background:var(--ok,#1F7A4D)}
+  .ver-pill .dot.bad{background:var(--bad,#B3261E)}
+  .ver-pill .shared{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--velocity)}
+  .st-ico{display:inline-flex;flex:none}
+  .st-ico.bad{color:var(--bad,#B3261E)}
+  .st-ico.mid{color:#8FA0AF}
+  .st-ico.ok{color:var(--ok,#1F7A4D)}
 </style>
 </head>
 <body>
@@ -106,6 +117,7 @@
   <span class="sub">read-only scan report</span>
 </header>
 <main>
+  <div class="ver-bar" id="vers"></div>
   <div class="rg-title" id="title" style="display:none">
     <span id="t-badge"></span>
     <h2 id="t-name"></h2>
@@ -118,27 +130,72 @@
 <script src="/static/render.js"></script>
 <script>
 const RUN_ID = {{ run_id | tojson }};
+let RUNS = [], SELECTED = null;
+
+function tsOf(r){ return r.scanned_at_iso || r.scanned_at || ''; }
+
+// Group the client's scan history into runs, newest first - the same
+// run_id grouping the dashboard uses, minus the edit/delete controls.
+function buildRuns(rows){
+  const by = {}, order = [];
+  rows.forEach((r, i) => {
+    if (r.scanned_at_iso) r.scanned_local = new Date(r.scanned_at_iso).toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
+    const key = r.run_id || `solo-${r._id ?? i}`;
+    if (!by[key]) { by[key] = {key, items: [], name: '', when: ''}; order.push(by[key]); }
+    by[key].items.push({r, i});
+    if (!by[key].name && r.client_name) by[key].name = r.client_name;
+    const t = tsOf(r);
+    if (t > by[key].when) by[key].when = t;
+  });
+  return order.sort((a, b) => (b.when || '').localeCompare(a.when || ''));
+}
+
+function verBar(){
+  if (RUNS.length < 2) return '';
+  return RUNS.map(g => {
+    const w = g.items[0].r.scanned_local || g.items[0].r.scanned_at || '';
+    const worst = g.items.some(x => ['misconfigured','error'].includes(x.r.verdict)
+      || (x.r.products||[]).some(p => p.fired < p.expected)
+      || (x.r.state_checks||[]).some(c => c.status === 'fail'));
+    const isShared = g.key === RUN_ID;
+    const tip = isShared ? ' data-tip="The run this link was created for"' : '';
+    return `<button class="ver-pill${g.key === SELECTED ? ' on' : ''}"${tip} onclick="pickRun('${g.key.replace(/'/g,"\\'")}')"><span class="dot ${worst ? 'bad' : 'ok'}"></span>${w}${isShared ? '<span class="shared">shared</span>' : ''}</button>`;
+  }).join('');
+}
+
+function pickRun(key){
+  SELECTED = key;
+  draw();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function draw(){
+  const g = RUNS.find(x => x.key === SELECTED) || RUNS[0];
+  const items = g.items, main = mainItem(g);
+  const bar = verBar();
+  $('vers').innerHTML = bar;
+  $('vers').style.display = bar ? 'flex' : 'none';
+  $('t-badge').innerHTML = groupBadge(items);
+  $('t-name').textContent = g.name || main.r.url;
+  $('t-when').textContent = `${items.length} page${items.length>1?'s':''} \u00b7 ${main.r.scanned_local || ''}`;
+  $('title').style.display = 'flex';
+  $('pages').innerHTML =
+    `<div class="site open"><div class="site-body">${chainFor(main.r, {states: false})}<div class="detail">${cmBlock(main.r)}${stateChecksHtml(main.r)}${actionItemsHtml(items.map(i => i.r), main.r.implementation || '')}</div></div></div>`
+    + items.map(({r, i}) => renderSite(r, i)).join('');
+}
+
 (async function(){
   try {
     const d = await (await fetch(`/api/run/${encodeURIComponent(RUN_ID)}`)).json();
-    const items = (d.results || []).map((r, i) => {
-      if (r.scanned_at_iso) r.scanned_local = new Date(r.scanned_at_iso).toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
-      return {r, i};
-    });
-    if (!items.length){
+    RUNS = buildRuns(d.results || []);
+    if (!RUNS.length){
       $('loading').textContent = 'Scan not found - it may have been deleted.';
       return;
     }
-    const g = {items, name: items.map(x => x.r.client_name).find(Boolean) || ''};
-    const main = mainItem(g);
-    $('t-badge').outerHTML = groupBadge(items);
-    $('t-name').textContent = g.name || main.r.url;
-    $('t-when').textContent = `${items.length} page${items.length>1?'s':''} \u00b7 ${main.r.scanned_local || ''}`;
-    $('title').style.display = 'flex';
-    $('pages').innerHTML =
-      `<div class="site open"><div class="site-body">${chainFor(main.r, {states: false})}<div class="detail">${cmBlock(main.r)}${stateChecksHtml(main.r)}${actionItemsHtml(items.map(i => i.r), main.r.implementation || '')}</div></div></div>`
-      + items.map(({r, i}) => renderSite(r, i)).join('');
-    document.querySelector('.site')?.classList.add('open');
+    // The link's own run wins over the newest, so a report keeps
+    // showing what it showed when it was sent.
+    SELECTED = (RUNS.find(g => g.key === RUN_ID) || RUNS[0]).key;
+    draw();
     $('loading').style.display = 'none';
     $('footnote').style.display = 'block';
   } catch(e){

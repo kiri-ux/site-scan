@@ -115,6 +115,51 @@ def scans_for_run(run_id):
         return out
 
 
+def scans_for_run_client(run_id, limit=500):
+    """Every scan belonging to the client that owns run_id.
+
+    Powers the share page's run pills. Client identity mirrors the
+    dashboard's grouping in index.html (clientGroups): client_name,
+    lowercased and trimmed. When the name is blank - older runs, quick
+    one-off scans - fall back to the run's own URLs, matching only
+    other unnamed scans so a named client never absorbs them.
+
+    Newest first, capped: a share link is a client-facing page and an
+    unbounded history query is not worth the tail risk.
+    """
+    if not enabled():
+        return []
+    ts = ("to_char(scanned_at AT TIME ZONE 'UTC', "
+          "'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')")
+    name_expr = "lower(btrim(coalesce(result->>'client_name', '')))"
+    with _conn() as cn, cn.cursor() as cur:
+        cur.execute(f"""
+            SELECT {name_expr}, array_agg(DISTINCT url)
+            FROM scans WHERE result->>'run_id' = %s
+            GROUP BY 1 ORDER BY 1 DESC LIMIT 1""", (run_id,))
+        row = cur.fetchone()
+        if not row:
+            return []
+        client, urls = row
+        if client:
+            cur.execute(f"""
+                SELECT id, result, {ts} FROM scans
+                WHERE {name_expr} = %s
+                ORDER BY scanned_at DESC LIMIT %s""", (client, limit))
+        else:
+            cur.execute(f"""
+                SELECT id, result, {ts} FROM scans
+                WHERE url = ANY(%s) AND {name_expr} = ''
+                ORDER BY scanned_at DESC LIMIT %s""", (urls, limit))
+        out = []
+        for sid, result, iso in cur.fetchall():
+            r = result if isinstance(result, dict) else json.loads(result)
+            r["_id"] = sid
+            r["scanned_at_iso"] = iso
+            out.append(r)
+        return out
+
+
 def delete_scans(ids):
     ids = [int(i) for i in ids]
     if not ids:
