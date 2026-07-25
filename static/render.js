@@ -52,6 +52,14 @@ function chainLink(k, v, state){
   const tip = (CHAIN_TIPS[k] || '').replace(/"/g, '&quot;');
   return `<div class="link ${state}" data-tip="${tip}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
 }
+const GTM_PROCEDURE = `<details class="ai-proc"><summary>GTM consent procedure - the standard steps</summary><ol>
+<li><b>Consent defaults:</b> add a Consent Mode default block setting every storage type to <code>denied</code> (ad_storage, analytics_storage, ad_user_data, ad_personalization), firing on GTM's <i>Consent Initialization - All Pages</i> trigger (or pasted above the GTM snippet in page code).</li>
+<li><b>Connect the CMP:</b> enable the banner's Google Consent Mode integration (most CMPs have a toggle or GTM template) so Accept/Reject sends <code>gtag('consent','update',...)</code>.</li>
+<li><b>Google tags:</b> respect Consent Mode automatically once defaults exist - verify each tag's consent settings in GTM show the built-in checks.</li>
+<li><b>Non-Google tags</b> (Meta, TikTok, etc.): set "Additional consent checks" to require <code>ad_storage</code>, or fire them on a consent-updated event where <code>ad_storage == granted</code> instead of page load.</li>
+<li><b>Publish, then re-scan:</b> the report should show Defaults &#10003; CORRECT SETUP, no pre-consent fires, and reject honored - the before/after pair is the verification.</li>
+</ol></details>`;
+
 function ownerBadge(owner){
   if (owner === 'VICI') return `<span class="ob ob-vici" data-tip="Vici-side change - the buyer makes this fix directly">VICI</span>`;
   if (owner === 'CLIENT') return `<span class="ob ob-ext" data-tip="Client-side change - Vici provides the corrected snippet or spec; the client's web team installs it">CLIENT</span>`;
@@ -76,9 +84,19 @@ function actionItemsHtml(rs, impl){
   if (!hasCmp && main.ok && main.mode === 'full'){
     if (mechFail){
       const mechStates = (main.state_checks || []).filter(c => c.check === 'Opt-out mechanism' && c.status === 'fail').map(c => c.state);
-      push('CLIENT', `Give residents a working opt-out method - required for ${mechStates.join(' & ')} targeting and currently absent (no banner, no opt-out link, GPC not honored). Recommended fix: a consent banner (CMP), which delivers the opt-out link, GPC handling, and pixel gating in one install - the law requires the opt-out, not the banner itself. Vici advises on vendors and applies the GTM consent procedure once one is in place.`);
+      const followUp = pixOwner === 'VICI'
+        ? 'Once one is in place, Vici applies the GTM consent procedure.'
+        : pixOwner === 'CLIENT'
+        ? "Once one is in place, Vici provides the GTM consent procedure for the client's team to apply."
+        : 'Once one is in place, the GTM consent procedure gates the pixels (owner per Implementation).';
+      push('CLIENT', `Give residents a working opt-out method - required for ${mechStates.join(' & ')} targeting and currently absent (no banner, no opt-out link, GPC not honored). Recommended fix: a consent banner (CMP), which delivers the opt-out link, GPC handling, and pixel gating in one install - the law requires the opt-out, not the banner itself. ${followUp}${GTM_PROCEDURE}`);
     } else {
-      push('CLIENT', 'Recommended (not required): install a consent banner (CMP) to gate pixels and cover current and future state targeting. Vici advises on vendor selection and applies the GTM consent procedure once one is in place.');
+      const followUp2 = pixOwner === 'VICI'
+        ? 'Vici applies the GTM consent procedure once one is in place.'
+        : pixOwner === 'CLIENT'
+        ? "Vici provides the GTM consent procedure for the client's team to apply once one is in place."
+        : 'The GTM consent procedure gates the pixels once one is in place.';
+      push('CLIENT', `Recommended (not required): install a consent banner (CMP) to gate pixels and cover current and future state targeting. ${followUp2}${GTM_PROCEDURE}`);
     }
   }
   // consent-gating for product pixels (only meaningful once a CMP exists)

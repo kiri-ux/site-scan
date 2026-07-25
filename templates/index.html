@@ -254,6 +254,12 @@
   .cm-stamp{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.07em;border-radius:6px;padding:4px 11px;white-space:nowrap}
   .cm-stamp.ok{background:var(--ok,#1F7A4D);color:#fff}
   .cm-stamp.bad{background:var(--bad,#B3261E);color:#fff}
+  .ai-proc{margin-top:6px;font-size:12.5px}
+  .ai-proc summary{cursor:pointer;color:var(--velocity);font-weight:600;list-style:none}
+  .ai-proc summary::before{content:"\25B8  "}
+  .ai-proc[open] summary::before{content:"\25BE  "}
+  .ai-proc ol{margin:6px 0 0 18px;padding:0}
+  .ai-proc li{margin-bottom:5px;display:list-item}
 </style>
 </head>
 <body>

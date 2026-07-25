@@ -688,3 +688,10 @@ banner visibility, Consent Mode, or pre-consent fires.
   distinct from "Unrecognized consent banner" (which has choices but
   no known vendor). Wall Residences (Craft CMS site-built bar) is the
   archetype.
+
+## v0.15.8
+- The GTM consent procedure is embedded in the CMP action item as a
+  collapsed expander (5 standard steps: consent defaults on the
+  Consent Initialization trigger, CMP integration, Google tag checks,
+  non-Google consent gating, publish + re-scan verification). The item
+  stays one line until opened; renders on share pages too.
