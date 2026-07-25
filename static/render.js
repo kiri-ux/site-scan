@@ -54,9 +54,26 @@ function chainLink(k, v, state){
 }
 function stateChecksHtml(r){
   if (!(r.state_checks || []).length) return '';
-  return `<h3>State checks</h3><ul>` + r.state_checks.map(c =>
-    `<li><span class="badge ${c.status==='fail'?'bad':c.status==='pass'?'ok':'warn'}">${c.state} ${c.status}</span>
-      <div><b>${c.check}</b> <span class="evidence">${c.detail}</span></div></li>`).join('') + `</ul>`;
+  // combine rows where the same check+status+detail applies to several
+  // states (detail differs only by the state name in "...for X
+  // targeting") - one row, one tag per state
+  const NAME_RE = /for [A-Z][A-Za-z .]+ targeting/g;
+  const groups = [];
+  const byKey = {};
+  for (const c of r.state_checks){
+    const key = c.check + '|' + c.status + '|' + (c.detail || '').replace(NAME_RE, 'for # targeting');
+    if (byKey[key]) { byKey[key].states.push(c.state); }
+    else { byKey[key] = {states: [c.state], check: c.check, status: c.status, detail: c.detail || ''}; groups.push(byKey[key]); }
+  }
+  return `<h3>State checks</h3><ul>` + groups.map(g => {
+    const cls = g.status==='fail'?'bad':g.status==='pass'?'ok':'warn';
+    const tags = g.states.map(s => `<span class="badge ${cls}">${s} ${g.status}</span>`).join(' ');
+    const detail = g.states.length > 1
+      ? g.detail.replace(NAME_RE, `for ${g.states.join(' & ')} targeting`)
+      : g.detail;
+    return `<li>${tags}
+      <div><b>${g.check}</b> <span class="evidence">${detail}</span></div></li>`;
+  }).join('') + `</ul>`;
 }
 
 function chainFor(r, opts){
@@ -162,7 +179,7 @@ function renderSite(r, i){
         : px.fired_pre && !px.fired_post
         ? (hasCmp
             ? `<span class="badge warn"${tipAttr('pre-consent only')}>pre-consent only</span>`
-            : `<span class="badge warn"${tipAttr('ungated-pixel')}>ungated</span>`)
+            : `<span class="badge neutral"${tipAttr('ungated-pixel')}>ungated</span>`)
         : (px.fired_pre ? `<span class="badge ok"${tipAttr('pre + post')}>pre + post</span>` : `<span class="badge ok"${tipAttr('post-consent')}>post-consent</span>`);
   const dspDetail = (r.mode === 'full' && r.ok) ? `<h3>Product pixels</h3>` + (prods.length ? prods.map(p => {
       const stateBadge = p.fired === 0 ? `<span class="badge bad"${tipAttr('missing')}>missing</span>`

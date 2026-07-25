@@ -594,3 +594,19 @@ banner visibility, Consent Mode, or pre-consent fires.
   Banking/Financial/Insurance/Crypto -> Financial, Child Care/Toys ->
   Children-directed (Insurance - Health triggers both). Manual
   category field remains accepted for backward compatibility.
+
+## v0.14.1
+- State-checks chain cell removed from client summaries (main app and
+  share pages) - the detailed pass/fail list right below it carries
+  the same information without the redundant second row.
+
+## v0.14.2
+- Identical state-check findings across states combine into one row
+  with a tag per state (CA FAIL + TX FAIL) and a merged "for CA & TX
+  targeting" phrase. Different statuses or details stay separate.
+
+## v0.14.3
+- The ungated badge is the same color (neutral blue) whether it
+  appears on a product pixel row or in Other pixels - same tag, same
+  meaning, same color. Its tooltip still explains the product-pixel
+  nuance.
