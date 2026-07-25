@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.15.27"
+SCANNER_REV = "0.15.29"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -294,6 +294,19 @@ def _containers_with(hints, corpora):
     low = [h.lower() for h in hints if h]
     return sorted(cid for cid, js in corpora.items()
                   if any(h in js for h in low))
+
+
+def _vendor_hints(vendor):
+    """Fingerprints for a tracker vendor: its beacon endpoints, the
+    script hosts a hardcoded snippet would reference, and any extra
+    code hints. Same evidence basis the product pixels use."""
+    hints = []
+    for t in TRACKER_ENDPOINTS:
+        if t.get("vendor") == vendor:
+            hints += list(t.get("patterns") or [])
+    hints += _SCRIPT_MARKERS.get(vendor, [])
+    hints += CODE_HINTS.get(vendor, [])
+    return hints
 
 
 def _generic_banner_probe(page):
@@ -831,6 +844,17 @@ def _full_scan_impl(browser, url, products=None, states=None,
     _gtm["containers_read"] = sorted(corpora)
     _gtm["containers_unread"] = [c for c in _cids[:3] if c not in corpora]
     result["gtm"] = _gtm
+
+    # Same container attribution for non-product trackers. These hit
+    # records are built before the containers are fetched, so annotate
+    # them here rather than duplicating the fetch upstream.
+    _vh = {}
+    for _key in ("pre_consent", "post_reject"):
+        for _h in result.get(_key) or []:
+            _v = _h.get("vendor")
+            if _v not in _vh:
+                _vh[_v] = _containers_with(_vendor_hints(_v), corpora)
+            _h["containers"] = _vh[_v]
 
     _ALIASES = {"Performance Max": "PMax"}  # saved clients / old payloads
     products = [_ALIASES.get(p, p) for p in products] if products else products

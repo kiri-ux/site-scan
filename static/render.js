@@ -310,18 +310,20 @@ function renderSite(r, i){
   for (const h of r.pre_consent || []){
     const prod = pixToProd[h.vendor];
     if (prod){
-      if (!prodAgg[prod]){ prodAgg[prod] = {vendor: prod, severity: h.severity, count: 0, agg: true, srcAgg: h.src}; grouped.push(prodAgg[prod]); }
+      if (!prodAgg[prod]){ prodAgg[prod] = {vendor: prod, severity: h.severity, count: 0, agg: true, srcAgg: h.src, contAgg: h.containers || []}; grouped.push(prodAgg[prod]); }
       prodAgg[prod].count++;
       if (prodAgg[prod].srcAgg !== h.src) prodAgg[prod].srcAgg = null;
+      // component pixels in different containers can't be rolled up
+      if (prodAgg[prod].contAgg.join() !== (h.containers || []).join()) prodAgg[prod].contAgg = [];
       if (h.severity === 'violation') prodAgg[prod].severity = 'violation';
     } else grouped.push(h);
   }
   const fires = grouped.length ? `<h3>Other pixels${preViol ? ` <span class="badge bad">${preViol} pre-consent</span>` : ''}</h3><ul>` + grouped.map(h =>
       h.agg
       ? `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='violation' ? tipAttr('violation') : tipAttr('ungated')}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
-        <div><b>${h.vendor}</b>${srcTag(h.srcAgg)} <span class="evidence">${h.count} component pixel${h.count>1?'s':''} - per-pixel detail in Product pixels above</span></div></li>`
+        <div><b>${h.vendor}</b>${srcTag(h.srcAgg, h.contAgg)} <span class="evidence">${h.count} component pixel${h.count>1?'s':''} - per-pixel detail in Product pixels above</span></div></li>`
       : `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='ungated' ? tipAttr('ungated') : h.severity==='violation' ? tipAttr('violation') : ''}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
-        <div><b>${h.vendor}</b>${srcTag(h.src)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+        <div><b>${h.vendor}</b>${srcTag(h.src, h.containers)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Other pixels</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
   const hasCmp = (r.cmps || []).length > 0;
@@ -353,7 +355,7 @@ function renderSite(r, i){
   // always hardcoded in the page <head>. Offer the three fix paths,
   const rejFires = (r.post_reject || []).length ? `<h3>Requests after Reject</h3><ul>` + r.post_reject.map(h =>
       `<li><span class="badge ${h.severity==='violation'?'bad':'warn'}">${h.severity}</span>
-        <div><b>${h.vendor}</b>${srcTag(h.src)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+        <div><b>${h.vendor}</b>${srcTag(h.src, h.containers)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.reject_tested ? `<h3>Requests after Reject</h3><p class="kv">No trackers fired after Reject - the decline path is honored.</p>` : '');
 
   const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>
