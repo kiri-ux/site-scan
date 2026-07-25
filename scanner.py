@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.15.4"
+SCANNER_REV = "0.15.7"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -236,7 +236,8 @@ def _generic_banner_probe(page):
         return page.evaluate("""() => {
           const out = {banner: false, tcf: !!window.__tcfapi,
                        usp: !!window.__uspapi, gpp: !!window.__gpp};
-          const btnRe = /^\\s*(accept|agree|allow|got it|ok(ay)?|reject|decline|deny|refuse|do not sell|manage (choices|preferences|cookies))/i;
+          const acceptRe = /^\\s*(accept|agree|allow|got it|ok(ay)?)/i;
+          const rejectRe = /^\\s*(reject|decline|deny|refuse|do not sell|manage (choices|preferences|cookies)|cookie settings|preferences|customize)/i;
           const txtRe = /(cookie|consent|privacy choices|personal information|tracking technologies)/i;
           for (const el of document.querySelectorAll('div,section,aside,dialog,footer')) {
             let st; try { st = getComputedStyle(el); } catch(e){ continue; }
@@ -246,9 +247,13 @@ def _generic_banner_probe(page):
             const txt = (el.innerText || '').slice(0, 4000);
             if (!txtRe.test(txt)) continue;
             const btns = el.querySelectorAll('button, a[role=button], input[type=button], input[type=submit]');
+            let acc = false, rej = false;
             for (const b of btns) {
-              if (btnRe.test((b.innerText || b.value || '').trim())) { out.banner = true; return out; }
+              const t = (b.innerText || b.value || '').trim();
+              if (acceptRe.test(t)) acc = true;
+              if (rejectRe.test(t)) rej = true;
             }
+            if (acc || rej) { out.banner = true; out.has_choice = rej; return out; }
           }
           return out;
         }""")
@@ -379,16 +384,39 @@ def _full_scan_impl(browser, url, products=None, states=None,
                     if generic.get(k):
                         ev.append(f"api: {label}")
                 if ev:
-                    result["cmps"].append({
-                        "name": "Unrecognized consent banner",
-                        "evidence": ev,
-                        "gtm_event": None,
-                        "notes": "A consent mechanism is present but the "
-                                 "vendor isn't in the signature list yet. "
-                                 "Identify the CMP before applying the GTM "
-                                 "consent procedure, and send Vici the "
-                                 "vendor name so a signature can be added.",
-                    })
+                    notice_only = (generic.get("banner")
+                                   and not generic.get("has_choice")
+                                   and not (generic.get("tcf")
+                                            or generic.get("usp")
+                                            or generic.get("gpp")))
+                    if notice_only:
+                        result["cmps"].append({
+                            "name": "Cookie notice (notice-only)",
+                            "evidence": ["heuristic: anchored bar with "
+                                         "cookie text and an accept/OK "
+                                         "button but no reject or "
+                                         "preferences option"],
+                            "gtm_event": None,
+                            "notes": "This is an informational bar, not a "
+                                     "consent mechanism - it offers no way "
+                                     "to decline, so it neither gates "
+                                     "pixels nor satisfies opt-out "
+                                     "expectations. Often site-built "
+                                     "(theme/CMS) rather than a CMP "
+                                     "product.",
+                        })
+                    else:
+                        result["cmps"].append({
+                            "name": "Unrecognized consent banner",
+                            "evidence": ev,
+                            "gtm_event": None,
+                            "notes": "A consent mechanism is present but "
+                                     "the vendor isn't in the signature "
+                                     "list yet. Identify the CMP before "
+                                     "applying the GTM consent procedure, "
+                                     "and send Vici the vendor name so a "
+                                     "signature can be added.",
+                        })
                     result["banner_visible"] = bool(generic.get("banner"))
         # else stays "unknown" - nothing to look for
 
@@ -1006,12 +1034,17 @@ def _category_checks(result, category):
     there is ours. Check-based wording throughout."""
     if category not in CATEGORIES:
         return
-    ad_vendors = sorted({h["vendor"] for h in result.get("pre_consent", [])}
-                        | {h["vendor"] for h in result.get("post_consent", [])
-                           if isinstance(h, dict) and h.get("vendor")}
-                        | {px["name"] for p in result.get("products", [])
-                           for px in p.get("pixels", [])
-                           if px.get("fired_pre") or px.get("fired_post")})
+    # product component pixels roll up under the product name (one
+    # "BARCK+" instead of Beeswax/DoubleClick/TTD/Yahoo separately)
+    prod_pixel_names = {px["name"] for p in result.get("products", [])
+                        for px in p.get("pixels", [])}
+    ad_vendors = sorted(({h["vendor"] for h in result.get("pre_consent", [])}
+                         | {h["vendor"] for h in result.get("post_consent", [])
+                            if isinstance(h, dict) and h.get("vendor")})
+                        - prod_pixel_names
+                        | {p["product"] for p in result.get("products", [])
+                           if any(px.get("fired_pre") or px.get("fired_post")
+                                  for px in p.get("pixels", []))})
     ungated = any(h["severity"] in ("ungated", "violation")
                   for h in result.get("pre_consent", [])) or any(
                   px.get("fired_pre") for p in result.get("products", [])

@@ -671,3 +671,20 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Field-label hint text moved into hover tooltips with a small info
   glyph - Partner, Industries, Implementation, Conversion URLs,
   Products, and State targets labels are one line each now.
+
+## v0.15.6
+- Opt-out/CMP action item drops "advises on vendors" and the consent-
+  procedure sentence now follows Implementation: Vici applies it
+  (Vici-owned GTM), Vici provides it for the client team to apply
+  (Client placement), neutral when unset.
+
+## v0.15.7
+- Category-check vendor lists roll product component pixels up under
+  the product name (one "BARCK+" instead of Beeswax/DoubleClick/TTD/
+  Yahoo individually).
+- New banner classification: an anchored cookie bar with an OK/accept
+  button but no reject or preferences option is reported as "Cookie
+  notice (notice-only)" - informational, not a consent mechanism -
+  distinct from "Unrecognized consent banner" (which has choices but
+  no known vendor). Wall Residences (Craft CMS site-built bar) is the
+  archetype.
