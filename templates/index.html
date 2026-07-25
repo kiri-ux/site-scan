@@ -212,7 +212,11 @@
   .detail ul{list-style:none}
   .detail li{font-size:13.5px;padding:7px 0;border-bottom:1px dashed var(--line);display:flex;gap:10px;align-items:baseline}
   .detail li:last-child{border-bottom:none}
-  .detail .u{color:var(--muted);font-size:12px;word-break:break-all}
+  .detail .u{color:var(--muted);font-size:12px;word-break:break-all;display:none}
+  body.urls .detail .u{display:block}
+  .urltog{border:1px solid var(--line);background:#fff;border-radius:16px;padding:4px 12px;font:500 12px 'Barlow',sans-serif;color:var(--muted);cursor:pointer}
+  .urltog:hover{border-color:var(--velocity);color:var(--velocity)}
+  body.urls .urltog{border-color:var(--velocity);color:var(--atlas);background:#EAF3FB}
   .evidence{font-size:12.5px;color:var(--muted)}
   .pill{display:inline-block;background:var(--info-bg);color:var(--velocity);border-radius:4px;font-size:12px;font-weight:600;padding:2px 8px}
   .kv{font-size:13.5px;color:var(--muted)}
@@ -340,7 +344,7 @@
     </div>
   </section>
 
-  <div class="results-tools" id="results-tools"></div>
+  <div class="results-tools" id="results-tools"><button class="urltog" id="urltog" onclick="toggleUrls()">Show request URLs</button></div>
   <section id="results"></section>
   <p class="empty" id="empty">Results appear here. Each site gets a consent chain: CMP &rarr; banner &rarr; Consent Mode &rarr; pre-consent fires.</p>
   </div>
@@ -830,8 +834,14 @@ function renderGroup(g, cg, verBar){
   </div>`;
 }
 
+function toggleUrls(){
+  const on = document.body.classList.toggle('urls');
+  $('urltog').textContent = on ? 'Hide request URLs' : 'Show request URLs';
+}
+
 function render(){
   $('empty').style.display = results.length ? 'none' : 'block';
+  $('results-tools').style.display = results.length ? 'flex' : 'none';
   $('results').innerHTML = clientGroups().map(renderClient).join('');
   $('csv').disabled = !results.length;
   $('delete-all').disabled = !results.length;
