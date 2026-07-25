@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.13.7"
+SCANNER_REV = "0.13.12"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -994,18 +994,101 @@ def _apply_verdict(r):
 
 # ---------------------------------------------------------------- entry
 
+CATEGORIES = ("Healthcare", "Financial services", "Children-directed")
+
+
+def _category_checks(result, category):
+    """Sensitive-context checks for buyer-DECLARED categories. The
+    category is a human declaration, never auto-detected - deciding a
+    site's regulatory context is a judgment call; observing what fires
+    there is ours. Check-based wording throughout."""
+    if category not in CATEGORIES:
+        return
+    ad_vendors = sorted({h["vendor"] for h in result.get("pre_consent", [])}
+                        | {h["vendor"] for h in result.get("post_consent", [])
+                           if isinstance(h, dict) and h.get("vendor")}
+                        | {px["name"] for p in result.get("products", [])
+                           for px in p.get("pixels", [])
+                           if px.get("fired_pre") or px.get("fired_post")})
+    ungated = any(h["severity"] in ("ungated", "violation")
+                  for h in result.get("pre_consent", [])) or any(
+                  px.get("fired_pre") for p in result.get("products", [])
+                  for px in p.get("pixels", []))
+    if category == "Healthcare":
+        if ad_vendors:
+            result["state_checks"].append(
+                {"state": "US", "check": "Health-context tracking",
+                 "status": "fail" if ungated else "warn",
+                 "detail": "Ad/analytics trackers observed on a declared "
+                           f"health-context site: {', '.join(ad_vendors)}. "
+                           "Sending health-related browsing to ad platforms "
+                           "is the pattern behind FTC actions (GoodRx, "
+                           "BetterHelp) and the hospital pixel litigation "
+                           "wave; most state privacy laws treat health data "
+                           "as sensitive, requiring OPT-IN consent, and WA "
+                           "My Health My Data goes further. "
+                           + ("Trackers fire without consent gating here."
+                              if ungated else
+                              "Trackers are consent-gated, but sensitive-"
+                              "data opt-in quality needs compliance review.")
+                           + " Flag for compliance review before running ad "
+                           "pixels on this client."})
+        else:
+            result["state_checks"].append(
+                {"state": "US", "check": "Health-context tracking",
+                 "status": "pass",
+                 "detail": "No ad/analytics trackers observed on this "
+                           "declared health-context page."})
+    elif category == "Children-directed":
+        if ad_vendors:
+            result["state_checks"].append(
+                {"state": "US", "check": "Child-directed tracking",
+                 "status": "fail",
+                 "detail": "Trackers observed on a declared child-directed "
+                           f"site: {', '.join(ad_vendors)}. COPPA requires "
+                           "verifiable PARENTAL consent before collecting "
+                           "personal information from under-13s - a normal "
+                           "consent banner does not satisfy it. Behavioral "
+                           "advertising to children is the FTC's most "
+                           "actively enforced tracking rule. Flag for "
+                           "compliance review immediately."})
+        else:
+            result["state_checks"].append(
+                {"state": "US", "check": "Child-directed tracking",
+                 "status": "pass",
+                 "detail": "No trackers observed on this declared "
+                           "child-directed page."})
+    elif category == "Financial services":
+        if ungated:
+            result["state_checks"].append(
+                {"state": "US", "check": "Financial-context tracking",
+                 "status": "warn",
+                 "detail": "Trackers fire without consent gating on a "
+                           "declared financial-services site: "
+                           f"{', '.join(ad_vendors)}. GLBA covers customer "
+                           "financial data, and regulators (CFPB/FTC) have "
+                           "scrutinized pixels on loan and account pages. "
+                           "Recommend consent gating and a review of what "
+                           "page context the pixels transmit."})
+
+
 def scan_site(raw_url, prefer_full=True, products=None, states=None,
-              site_checks=True):
+              site_checks=True, category=None):
     url = normalize_url(raw_url)
     if not url:
         r = _empty_result(raw_url or "")
         r["error"] = "Not a valid URL."
         return _apply_verdict(r)
+    _cat = category if category in CATEGORIES else None
 
     if prefer_full:
         try:
-            return _apply_verdict(full_scan(url, products=products, states=states,
-                                        site_checks=site_checks))
+            r = _apply_verdict(full_scan(url, products=products,
+                                         states=states,
+                                         site_checks=site_checks))
+            if site_checks:
+                _category_checks(r, _cat)
+            return r
         except ImportError as e:
             print(f"[scan] POOL UNAVAILABLE (ImportError: {e}) - basic "
                   f"fallback for {url}", flush=True)

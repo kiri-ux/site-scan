@@ -118,13 +118,16 @@ def scan():
     products = [p for p in (data.get("products") or [])
                 if p in PRODUCT_NAMES]
     states = [s for s in (data.get("states") or []) if s in STATE_CODES]
+    category = str(data.get("category", ""))[:60] or None
     result = scan_site(data.get("url", ""),
                        prefer_full=bool(data.get("full", True)),
                        products=products or None,
                        states=states or None,
-                       site_checks=bool(data.get("site_checks", True)))
+                       site_checks=bool(data.get("site_checks", True)),
+                       category=category)
     result["client_name"] = str(data.get("client_name", ""))[:200]
     result["partner_name"] = str(data.get("partner_name", ""))[:200]
+    result["category"] = str(data.get("category", ""))[:60]
     result["run_id"] = str(data.get("run_id", ""))[:64]
     if result["ok"]:
         try:
@@ -176,7 +179,8 @@ def upsert_site():
     try:
         db.upsert_site(url, freq, products, conversion_urls,
                        include_conversions, client_name, states,
-                       str(data.get("partner_name", ""))[:200])
+                       str(data.get("partner_name", ""))[:200],
+                       str(data.get("category", ""))[:60])
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500

@@ -282,7 +282,9 @@
     <div class="chips" id="product-chips"></div>
     <label class="field-label">State targets <span class="opt">(where this client's campaigns run - adds GPC and opt-out checks for those states)</span></label>
     <div class="chips" id="state-chips"></div>
-    <div class="hint">Full scan loads each page in a headless browser, records pre-consent fires, clicks Accept, then verifies the selected products' pixels. Roughly 15&ndash;40 seconds per page.</div>
+    <label class="field-label" style="margin-top:12px">Client category <span class="opt">(optional - adds sensitive-context checks for stricter-regulated verticals)</span></label>
+<div class="chips" id="cat-pills"></div>
+<div class="hint">Full scan loads each page in a headless browser, records pre-consent fires, clicks Accept, then verifies the selected products' pixels. Roughly 15&ndash;40 seconds per page.</div>
     <div class="row">
       <button class="btn-primary" id="go">Scan sites</button>
       <button class="btn-ghost" id="csv" disabled>Download CSV</button>
@@ -310,22 +312,22 @@
   <div id="view-market" class="mkt">
 <h2>What we include vs the competition</h2>
 <table>
-  <tr><th>Capability</th><th class="vici">Vici Scanner</th><th>Code-Cube</th><th>Lokker</th><th>ObservePoint</th><th>ConsentPixel</th><th>CMPs (iubenda / Usercentrics)</th></tr>
-  <tr><td>CMP detection + GTM trigger mapping (14 CMPs)</td><td class="vici yes">&#10003;</td><td class="part">partial</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">own banner only</td></tr>
-  <tr><td>Pre-consent pixel capture (headless browser)</td><td class="vici yes">&#10003;</td><td class="part">flags only</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">basic scan</td></tr>
-  <tr><td>Accept-path simulation (clicks the banner)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">limited</td><td class="no">&mdash;</td></tr>
-  <tr><td>Reject-path test (fires after user says no?)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
-  <tr><td>GPC signal test (12 states now require honoring)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="part">config</td><td class="no">&mdash;</td><td class="part">honor, don't test</td></tr>
-  <tr><td>Privacy policy presence check (FTC &sect;5 baseline)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="part">policy generators</td></tr>
-  <tr><td>State-law check map with citations (20 states)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
-  <tr><td>Vici product verification (BARCK+ 5/5, Meta, Mobile&hellip;)</td><td class="vici"><span class="only">Only us</span></td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
-  <tr><td>Scheduled scans + alerting</td><td class="vici yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">policy alerts</td></tr>
-  <tr><td>Shareable read-only client reports</td><td class="vici yes">&#10003;</td><td class="part">portal</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">white-label</td><td class="no">&mdash;</td></tr>
-  <tr><td>Real-user monitoring on live traffic</td><td class="vici no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">add-on</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
-  <tr><td>Full journey simulation (cart, checkout)</td><td class="vici no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
-  <tr><td>Network-layer blocking / enforcement</td><td class="vici no">&mdash;</td><td class="no">&mdash;</td><td class="yes">Guardian</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="part">tag blocking</td></tr>
-  <tr><td>Third-party attestation + vendor E&amp;O</td><td class="vici no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td></tr>
-  <tr class="price"><td>Pricing (per site / month unless noted)</td><td class="vici">$30&ndash;50 wholesale<br>$99&ndash;149 retail (proposed)</td><td>&euro;99&ndash;600<br>(entry: 1 domain, 1 scan/day)</td><td>Quote-only<br>(CMP requires Privacy Edge)</td><td>Enterprise quote</td><td>Agencies resell at $50&ndash;100</td><td>$6&ndash;100 / ~&euro;60+</td></tr>
+  <tr><th>Capability</th><th class="vici">Vici Scanner</th><th>Code-Cube</th><th>Lokker</th><th>ObservePoint</th><th>ConsentPixel</th><th>Trackingplan</th><th>CMPs (iubenda / Usercentrics / CookieHub / Osano)</th></tr>
+  <tr><td>CMP detection + GTM trigger mapping (14 CMPs)</td><td class="vici yes">&#10003;</td><td class="part">partial</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">integrates</td><td class="part">own banner only</td></tr>
+  <tr><td>Pre-consent pixel capture (headless browser)</td><td class="vici yes">&#10003;</td><td class="part">flags only</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">live traffic</td><td class="part">basic scan</td></tr>
+  <tr><td>Accept-path simulation (clicks the banner)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">limited</td><td class="part">real users</td><td class="no">&mdash;</td></tr>
+  <tr><td>Reject-path test (fires after user says no?)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="part">via real traffic</td><td class="no">&mdash;</td></tr>
+  <tr><td>GPC signal test (12 states now require honoring)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="part">config</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="part">honor, don't test</td></tr>
+  <tr><td>Privacy policy presence check (FTC &sect;5 baseline)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="part">policy generators</td></tr>
+  <tr><td>State-law check map with citations (20 states)</td><td class="vici yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
+  <tr><td>Vici product verification (BARCK+ 5/5, Meta, Mobile&hellip;)</td><td class="vici"><span class="only">Only us</span></td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td></tr>
+  <tr><td>Scheduled scans + alerting</td><td class="vici yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">real-time</td><td class="part">policy alerts</td></tr>
+  <tr><td>Shareable read-only client reports</td><td class="vici yes">&#10003;</td><td class="part">portal</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">white-label</td><td class="part">dashboards</td><td class="no">&mdash;</td></tr>
+  <tr><td>Real-user monitoring on live traffic</td><td class="vici no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="part">add-on</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td></tr>
+  <tr><td>Full journey simulation (cart, checkout)</td><td class="vici no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="part">observes real</td><td class="no">&mdash;</td></tr>
+  <tr><td>Network-layer blocking / enforcement</td><td class="vici no">&mdash;</td><td class="no">&mdash;</td><td class="yes">Guardian</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="no">&mdash;</td><td class="part">tag blocking</td></tr>
+  <tr><td>Third-party attestation + vendor E&amp;O</td><td class="vici no">&mdash;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="yes">&#10003;</td><td class="no">&mdash;</td><td class="yes">&#10003;</td></tr>
+  <tr class="price"><td>Pricing (per site / month unless noted)</td><td class="vici">$30&ndash;50 wholesale<br>$99&ndash;149 retail (proposed)</td><td>&euro;99&ndash;600<br>(entry: 1 domain, 1 scan/day)</td><td>Quote-only<br>(CMP requires Privacy Edge)</td><td>Enterprise quote</td><td>Agencies resell at $50&ndash;100</td><td>$299&ndash;1,499<br>(per property; free tier)</td><td>$6&ndash;100 / ~&euro;60+<br>(CookieHub &euro;6&ndash;30; Osano $199+)</td></tr>
 </table>
 
 <h2>Price ladder</h2>
@@ -334,6 +336,7 @@
   <div class="lrow"><div class="lname">Usercentrics</div><div class="ltrack"><div class="lbar" style="left:10%;width:18%"><span>~&euro;60+</span></div></div></div>
   <div class="lrow"><div class="lname">ConsentPixel</div><div class="ltrack"><div class="lbar" style="left:8%;width:16%"><span>$50&ndash;100 resale</span></div></div></div>
   <div class="lrow"><div class="lname">Code-Cube</div><div class="ltrack"><div class="lbar" style="left:16%;width:66%"><span>&euro;99&ndash;600</span></div></div></div>
+  <div class="lrow"><div class="lname">Trackingplan</div><div class="ltrack"><div class="lbar" style="left:38%;width:52%"><span>$299&ndash;1,499</span></div></div></div>
   <div class="lrow"><div class="lname">Lokker</div><div class="ltrack"><div class="lbar quote" style="left:52%;width:40%"><span>quote-only</span></div></div></div>
   <div class="lrow"><div class="lname">ObservePoint</div><div class="ltrack"><div class="lbar quote" style="left:66%;width:30%"><span>enterprise</span></div></div></div>
   <div class="lrow"><div class="lname"><b>Vici Scanner</b></div><div class="ltrack"><div class="lbar vgold" style="left:5%;width:8%"><span>$30&ndash;50</span></div><div class="lbar vgold" style="left:16%;width:9%"><span>$99&ndash;149</span></div></div></div>
@@ -399,6 +402,13 @@ let results = [];
 
 let dbEnabled = false;
 const PRODUCTS = ['Amazon','BARCK+','LinkedIn','Meta','Mobile','PPC','Performance Max','SEO','TikTok','WVID','YouTube'];
+const CATEGORIES = ['Healthcare','Financial services','Children-directed'];
+let selectedCategory = '';
+function renderCatPills(){
+  $('cat-pills').innerHTML = CATEGORIES.map(c =>
+    `<button type="button" class="chip ${selectedCategory===c?'on':''}" onclick="toggleCategory('${c.replace(/'/g,"\\'")}')">${c}</button>`).join('');
+}
+function toggleCategory(c){ selectedCategory = selectedCategory === c ? '' : c; renderCatPills(); }
 let selectedProducts = [];
 let convUrls = [];
 function renderConvPills(){
@@ -608,6 +618,7 @@ function editSite(i){
   const s = schedSites[i];
   $('client-name').value = s.client_name || '';
   $('partner-name').value = s.partner_name || '';
+  selectedCategory = s.category || ''; renderCatPills();
   $('site-url').value = s.url;
   convUrls = sanitizeConvList(s.conversion_urls); renderConvPills();
   selectedProducts = [...(s.products || [])];
@@ -616,6 +627,7 @@ function editSite(i){
   renderChips();
   renderStateChips();
   showTab('scan');
+  renderCatPills();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 async function upsertClient(frequency, btn){
@@ -627,7 +639,7 @@ async function upsertClient(frequency, btn){
     body: JSON.stringify({url, frequency,
       products: selectedProducts, states: selectedStates, conversion_urls: conv,
       include_conversions: true, client_name: $('client-name').value.trim(),
-      partner_name: $('partner-name').value.trim()})});
+      partner_name: $('partner-name').value.trim(), category: selectedCategory})});
   if (resp.ok && btn){
     const label = btn.textContent;
     btn.textContent = 'Saved \u2713';
@@ -727,6 +739,7 @@ function renderGroup(g, cg, verBar){
         return `<span class="pstat ${cls}">${p.product}${p.expected > 1 ? ` ${p.fired}/${p.expected}` : ''} ${p.fired === 0 ? '&#10007;' : '&#10003;'}</span>`;
       }).join('')}
       ${(mainItem(g).r.states || []).map(s => `<span class="rtag">${s}</span>`).join('')}
+      ${(() => { const c = g.items.map(x => x.r.category).find(Boolean); return c ? `<span class="rtag" data-tip="Buyer-declared client category - adds sensitive-context checks">${c}</span>` : ''; })()}
       <span class="scanned icon-clock" title="Most recent pull: ${when}" aria-label="Scanned ${when}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
       ${dbEnabled && !g.key.startsWith('solo-') ? `<button class="rg-del icon-btn" style="color:var(--velocity)" title="Copy a read-only link to just this scan" aria-label="Share" onclick="event.stopPropagation(); shareRun('${g.key.replace(/'/g,"\\'")}', this)">${ICONS.share}</button>` : ''}
       <button class="rg-del icon-btn" style="color:var(--velocity)" title="Load this run's client, URLs, and products back into the scan form to adjust and re-run" aria-label="Edit" onclick="event.stopPropagation(); editRun('${g.key.replace(/'/g,"\\'")}')">${ICONS.edit}</button>
@@ -767,6 +780,7 @@ function editRun(key){
   const main = mainItem(g);
   $('client-name').value = g.name || '';
   $('partner-name').value = g.items.map(x => x.r.partner_name).find(Boolean) || '';
+  selectedCategory = g.items.map(x => x.r.category).find(Boolean) || ''; renderCatPills();
   $('site-url').value = main.r.url;
   convUrls = sanitizeConvList(g.items.filter(it => it !== main).map(it => it.r.url)); renderConvPills();
   // selected products = products reported on the main page (selection mode
@@ -777,6 +791,7 @@ function editRun(key){
   renderChips();
   renderStateChips();
   showTab('scan');
+  renderCatPills();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
@@ -852,7 +867,7 @@ async function run(){
         const resp = await fetch('/scan', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === 0, run_id: runId, client_name: clientName, partner_name: partnerName}),
+          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === 0, run_id: runId, client_name: clientName, partner_name: partnerName, category: selectedCategory}),
           signal: ctrl.signal,
         });
         clearTimeout(timer);

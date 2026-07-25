@@ -563,3 +563,19 @@ banner visibility, Consent Mode, or pre-consent fires.
   client adds a banner..." replaces "once a banner is installed", with
   a pointer to the opt-out mechanism check for what state law actually
   requires.
+
+## v0.13.11
+- Trackingplan added as a matrix column (real-traffic observability -
+  the one adjacent vendor with genuine overlap) and to the price
+  ladder ($299-1,499/property). CookieHub and Osano folded into the
+  CMP column header and its pricing cell rather than getting columns -
+  they are banner vendors, a category already represented.
+
+## v0.13.12
+- Client category (Healthcare / Financial services / Children-
+  directed) - buyer-declared, never auto-detected. Adds sensitive-
+  context checks: health-context tracking (fail when ungated, warn
+  when gated - the GoodRx/BetterHelp/hospital-pixel pattern), COPPA
+  child-directed tracking (fail on any trackers), financial-context
+  warning on ungated fires. Persists through schedule, cron, Edit,
+  and shows as a header tag.

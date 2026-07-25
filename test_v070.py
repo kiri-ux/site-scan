@@ -52,7 +52,7 @@ print("schedule:", row["client_name"], row["url"])
 assert row["client_name"] == "Town & Country Ford"
 import batch_scan
 due = batch_scan.load_sites()
-assert any(name == "Town & Country Ford" for _, _, name, _, _, _ in due)
+assert any(name == "Town & Country Ford" for _, _, name, _, _, _, _ in due)
 print("batch carries name ok")
 
 srv.shutdown()
