@@ -184,8 +184,8 @@ function draw(){
   $('t-when').textContent = `${items.length} page${items.length>1?'s':''} \u00b7 ${main.r.scanned_local || ''}`;
   $('title').style.display = 'flex';
   $('pages').innerHTML =
-    `<div class="site open"><div class="site-body">${chainFor(main.r, {states: false})}<div class="detail">${cmBlock(main.r)}${stateChecksHtml(main.r)}${actionItemsHtml(items.map(i => i.r), main.r.implementation || '')}</div></div></div>`
-    + items.map(({r, i}) => renderSite(r, i)).join('');
+    `<div class="site open"><div class="site-body">${chainFor(main.r, {states: false})}<div class="detail">${cmBlock(main.r)}${cmpEvidenceHtml(main.r)}${stateChecksHtml(main.r)}${actionItemsHtml(items.map(i => i.r), main.r.implementation || '')}</div></div></div>`
+    + items.map(({r, i}) => renderSite(r, i, (main.r.cmps || []).map(c => c.name))).join('');
 }
 
 (async function(){

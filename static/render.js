@@ -87,7 +87,13 @@ function cmBlock(r){
     note = `<div class="cm-note warn">&#9888; No Consent Mode defaults detected in the GTM/gtag setup - Google tags likely run at full capability before consent even though a CMP is present. The GTM consent procedure installs denied-by-default settings.</div>`;
   }
   if (!stamp && !note) return '';
-  return `<div style="display:flex;gap:14px;align-items:center;margin:14px 0 6px">${stamp}${(r.gtm && (r.gtm.container_ids||[]).length) ? `<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ')}</b></span>` : ''}</div>${note}`;
+  // Ownership is a client-level fact, so it rides the summary GTM line
+  // rather than repeating on every page below.
+  const own = r.implementation === 'Vici-owned GTM'
+    ? ` <span class="ob ob-vici">VICI OWNED</span>`
+    : r.implementation === 'Client placement'
+    ? ` <span class="ob ob-ext">CLIENT OWNED</span>` : '';
+  return `<div style="display:flex;gap:14px;align-items:center;margin:14px 0 6px">${stamp}${(r.gtm && (r.gtm.container_ids||[]).length) ? `<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ')}</b>${own}</span>` : ''}</div>${note}`;
 }
 
 function ownerBadge(owner){
@@ -249,6 +255,27 @@ function stateChecksHtml(r){
   }).join('') + `</ul>`;
 }
 
+function cmpEvidenceHtml(r){
+  // Site-level: which CMP, how it was identified, and its consent
+  // trigger event. Rendered once in the client summary.
+  if (!(r.cmps || []).length) return '';
+  return `<h3>CMP evidence</h3><ul>` + r.cmps.map(c =>
+    `<li><div><b>${c.name}</b> <span class="evidence"${tipAttr('cmp-evidence')}>${(c.evidence||[]).join(' &middot; ')}</span>
+      ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}
+      ${c.gtm_event ? `<div class="evidence">Consent trigger event: <span class="pill">${c.gtm_event}</span></div>` : ''}</div></li>`).join('') + `</ul>`;
+}
+
+function cmpDiffHtml(r, siteNames){
+  // Only speaks up when this page's consent setup differs from the
+  // rest of the site - a page missing the banner is a real finding.
+  if (!siteNames) return '';
+  const mine = (r.cmps || []).map(c => c.name).sort();
+  const site = siteNames.slice().sort();
+  if (mine.join('|') === site.join('|')) return '';
+  const label = a => a.length ? a.join(', ') : 'none detected';
+  return `<h3>Consent setup differs on this page</h3><p class="kv">This page: <b>${label(mine)}</b> &middot; rest of the site: <b>${label(site)}</b>.</p>`;
+}
+
 function chainFor(r, opts){
   const withStates = !(opts && opts.states === false);
   const cmpNames = r.cmps.map(c => c.name).join(', ');
@@ -300,29 +327,17 @@ function chainFor(r, opts){
     </div>`;
 }
 
-function renderSite(r, i){
+function renderSite(r, i, siteCmpNames){
   const meta = VERDICT_META[r.verdict] || VERDICT_META.error;
   const prods = r.products || [];
   const chain = chainFor(r, {states: false});
 
-  const gtmEvent = r.cmps.map(c => c.gtm_event).find(Boolean);
   const kvBits = [];
-  if (r.gtm && r.gtm.found){
-    // Ownership comes from the Implementation field, so it covers every
-    // container on the page. Blank when unset rather than guessed.
-    const own = r.implementation === 'Vici-owned GTM'
-      ? ` <span class="ob ob-vici">VICI OWNED</span>`
-      : r.implementation === 'Client placement'
-      ? ` <span class="ob ob-ext">CLIENT OWNED</span>` : '';
-    kvBits.push(`<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ') || 'present'}</b>${own}</span>`);
-  }
-  if (gtmEvent) kvBits.push(`<span class="kv">Trigger event: <span class="pill">${gtmEvent}</span></span>`);
+  if (r.gtm && r.gtm.found) kvBits.push(`<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ') || 'present'}</b></span>`);
   const defaults = Object.entries(r.consent_defaults || {});
   if (defaults.length) kvBits.push(`<span class="kv"${tipAttr('defaults')}>Defaults: <b>${defaults.map(([k,v])=>`${k}=${v}`).join(', ')}</b></span>`);
 
-  const cmpDetail = r.cmps.length ? `<h3>CMP evidence</h3><ul>` + r.cmps.map(c =>
-      `<li><div><b>${c.name}</b> <span class="evidence"${tipAttr('cmp-evidence')}>${(c.evidence||[]).join(' &middot; ')}</span>
-        ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}</div></li>`).join('') + `</ul>` : '';
+  const cmpDetail = cmpDiffHtml(r, siteCmpNames);
 
   const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
   // group hits that belong to a selected product under the product name

@@ -119,7 +119,7 @@ CMP_SIGNATURES = [
         "cookies": ["cookielawinfo-checkbox", "CookieLawInfoConsent"],
         "banner_selectors": ["#cookie-law-info-bar"],
         "gtm_event": None,
-        "notes": "Older plugin versions have no dataLayer event - may need the regex fallback or plugin upgrade.",
+        "notes": "Older plugin versions have no dataLayer event - may need a plugin upgrade.",
     },
     {
         "name": "Quantcast Choice",
@@ -147,7 +147,7 @@ CMP_SIGNATURES = [
         "banner_selectors": ["#moove_gdpr_cookie_info_bar",
                              "[id*='moove_gdpr']", "[class*='moove-gdpr']"],
         "gtm_event": "cookie_consent_update",
-        "notes": "Moove Agency plugin, 300k+ installs - expect it often on WordPress clients. Supports Google Consent Mode v2 and direct GTM integration natively, so a site running this with Consent Mode unset has the gating capability switched off rather than missing. Reject button is optional in plugin settings and off by default, so some installs are accept-only. Accept/Reject are left to the strict text fallback - the plugin's button classes are theme-overridable and a mis-click here would corrupt the reject test.",
+        "notes": "Supports Google Consent Mode v2 and direct GTM integration natively, so an install with Consent Mode unset has the gating capability switched off rather than missing. The Reject button is optional in plugin settings and off by default.",
     },
     {
         "name": "ComplyAuto",
