@@ -651,3 +651,11 @@ banner visibility, Consent Mode, or pre-consent fires.
 ## v0.15.2
 - Implementation is a proper dropdown select (Not set / Vici-owned
   GTM / Client placement) instead of chips that could render empty.
+
+## v0.15.3
+- The no-CMP action item no longer implies a banner is required. With
+  a state opt-out mandate failing, the item leads with the actual
+  requirement (a working opt-out method) and frames the CMP as the
+  recommended fix; without a mandate it reads "Recommended (not
+  required)". The standalone opt-out-link item folds into the
+  mechanism item when both would appear.

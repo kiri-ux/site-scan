@@ -70,9 +70,16 @@ function actionItemsHtml(rs, impl){
   if (missing.length) push(pixOwner, `Install or repair the ${missing.join(', ')} pixel${missing.length>1?'s':''} - expected but not seen on any scanned page.` + (pixOwner==='CLIENT' ? ' Vici supplies the pixel code.' : ''));
 
   const hasCmp = (main.cmps||[]).length > 0;
-  // no CMP at all
+  // no CMP: what the LAW requires is a working opt-out method - a
+  // banner is the recommended delivery, never the requirement itself
+  const mechFail = (main.state_checks || []).some(c => c.check === 'Opt-out mechanism' && c.status === 'fail');
   if (!hasCmp && main.ok && main.mode === 'full'){
-    push('CLIENT', 'Choose and install a consent banner (CMP) - none detected. Vici advises on vendor selection and provides the GTM consent procedure once one is in place.');
+    if (mechFail){
+      const mechStates = (main.state_checks || []).filter(c => c.check === 'Opt-out mechanism' && c.status === 'fail').map(c => c.state);
+      push('CLIENT', `Give residents a working opt-out method - required for ${mechStates.join(' & ')} targeting and currently absent (no banner, no opt-out link, GPC not honored). Recommended fix: a consent banner (CMP), which delivers the opt-out link, GPC handling, and pixel gating in one install - the law requires the opt-out, not the banner itself. Vici advises on vendors and applies the GTM consent procedure once one is in place.`);
+    } else {
+      push('CLIENT', 'Recommended (not required): install a consent banner (CMP) to gate pixels and cover current and future state targeting. Vici advises on vendor selection and applies the GTM consent procedure once one is in place.');
+    }
   }
   // consent-gating for product pixels (only meaningful once a CMP exists)
   const preOnly = [...new Set(rs.flatMap(r => (r.products||[]).flatMap(p => (p.pixels||[]).filter(px => px.fired_pre && !px.fired_post).map(px => px.name))))];
@@ -93,7 +100,7 @@ function actionItemsHtml(rs, impl){
   for (const c of (main.state_checks || [])){
     if (c.status !== 'fail') continue;
     if (c.check === 'Privacy policy link') push('CLIENT', 'Add an accessible privacy policy link - none found on the page.');
-    if (c.check === 'Opt-out link') push('CLIENT', 'Add a "Your Privacy Choices" / opt-out link to the site footer.');
+    if (c.check === 'Opt-out link' && !mechFail) push('CLIENT', 'Add a "Your Privacy Choices" / opt-out link to the site footer.');
     if (c.check === 'GPC signal') push('CLIENT', 'Honor the Global Privacy Control signal - typically CMP configuration once a banner exists' + (hasCmp ? '.' : ' (part of the CMP conversation above).'));
     if (c.check === 'Health-context tracking' || c.check === 'Child-directed tracking') push('CLIENT', `${c.check.replace('-', ' ')} flagged - route to compliance review before continuing ad pixels on this client.`);
   }
