@@ -715,3 +715,11 @@ banner visibility, Consent Mode, or pre-consent fires.
   the consent procedure (expander attached), hardcoded page snippets
   get consent-wrapped or migrated. Consent-wrapped snippets are only
   mentioned for page-code scenarios, never GTM.
+
+## v0.15.12
+- The health/child compliance action items now say what is actually
+  being asked for: a documented decision from the client legal/
+  compliance owner, the mechanism (pixel payloads carry page URLs =
+  health browsing data), the legal bar (opt-in for sensitive data;
+  COPPA parental consent), the concrete options, and Vici role
+  (evidence + implementation, not the decision).
