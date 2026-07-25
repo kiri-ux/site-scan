@@ -106,6 +106,9 @@ function actionItemsHtml(rs, impl){
   if (!rs || !rs.length) return '';
   const pixOwner = impl === 'Vici-owned GTM' ? 'VICI' : impl === 'Client placement' ? 'CLIENT' : 'UNSET';
   const main = rs.slice().sort((a,b) => (a.url||'').length - (b.url||'').length)[0];
+  // Vici-owned items are a work queue for the buyer, not an
+  // explanation for a client - name the step and stop.
+  const terse = pixOwner === 'VICI';
   const items = [];
   // rank = dependency order within an owner's list; lower runs first.
   // 10 banner (everything below assumes it exists) - 20 gating -
@@ -114,7 +117,9 @@ function actionItemsHtml(rs, impl){
 
   // product pixels missing anywhere
   const missing = [...new Set(rs.flatMap(r => (r.products||[]).filter(p => p.fired === 0).map(p => p.product)))];
-  if (missing.length) push(pixOwner, `Install or repair the ${missing.join(', ')} pixel${missing.length>1?'s':''} - expected but not seen on any scanned page.` + (pixOwner==='CLIENT' ? ' Vici supplies the pixel code.' : ''), 40);
+  if (missing.length) push(pixOwner, terse
+    ? `Install or repair the ${missing.join(', ')} pixel${missing.length>1?'s':''}.`
+    : `Install or repair the ${missing.join(', ')} pixel${missing.length>1?'s':''} - expected but not seen on any scanned page.` + (pixOwner==='CLIENT' ? ' Vici supplies the pixel code.' : ''), 40);
 
   const hasCmp = (main.cmps||[]).length > 0;
   // Vici-owned GTM means the buyer applies the procedure (and will do
@@ -189,7 +194,12 @@ function actionItemsHtml(rs, impl){
       ? 'Vici migrates them into the GTM (or consent-wraps the snippets).'
       : "Vici provides consent-wrapped snippets or a GTM migration; the client's team installs.";
     let body;
-    if (runtime.length && !pageCode.length){
+    if (terse){
+      const bits = [];
+      if (runtime.length) bits.push(`apply the consent procedure in the GTM for ${runtime.join(', ')}`);
+      if (pageCode.length) bits.push(`migrate or consent-wrap ${pageCode.join(', ')} in page code`);
+      body = (bits.length ? bits.join('; ') : `${gate.join(', ')}`) + '.';
+    } else if (runtime.length && !pageCode.length){
       body = `${gate.join(', ')} - all GTM-injected, so ${gtmFix}`;
     } else if (pageCode.length && !runtime.length){
       body = `${gate.join(', ')} - all hardcoded in page code, so ${pageFix}`;
@@ -204,7 +214,7 @@ function actionItemsHtml(rs, impl){
     const why = gStates.length
       ? ` Flagged for ${gStates.join(' & ')} targeting, where a resident's opt-out has to take effect.`
       : ' No states are selected for this client, so this is not flagged as a state-law requirement. It still matters: the banner offers Reject and these trackers fire anyway.';
-    push(pixOwner, `Consent-gate the trackers firing around the banner - the CMP isn't gating them: ${body}${body.endsWith('.') ? '' : '.'}${why}${proc}`, 20);
+    push(pixOwner, `Consent-gate the trackers firing around the banner - the CMP isn't gating them: ${body}${body.endsWith('.') ? '' : '.'}${terse ? '' : why}${proc}`, 20);
     var gatePushed = true;
   }
 
@@ -220,12 +230,18 @@ function actionItemsHtml(rs, impl){
       ? ' Fixable in the GTM Consent Initialization trigger.'
       : ' Vici provides the default-consent block; it must load above the tags.';
     if (defKeys.length && leaking.length && hasCmp)
-      push(pixOwner, `Set Consent Mode defaults to denied (${leaking.join(', ')} currently granted).` + where, 30);
+      push(pixOwner, terse
+        ? 'Set Consent Mode defaults to denied in the GTM Consent Initialization trigger.'
+        : `Set Consent Mode defaults to denied (${leaking.join(', ')} currently granted).` + where, 30);
     else if (defKeys.length && leaking.length)
       // No banner means nothing would ever grant consent, so denied
       // defaults would leave the Google tags limited indefinitely.
-      push(pixOwner, `Set Consent Mode defaults to denied when the consent banner goes in - not before (${leaking.join(', ')} currently granted). With no banner to grant consent, denied defaults would leave Google tags running cookieless indefinitely, so the two changes ship together.` + where, 30);
-    else if (!defKeys.length && main.gtm && main.gtm.found && hasCmp) push(pixOwner, 'Add Google Consent Mode defaults (none detected) so Google tags start denied until consent.', 30);
+      push(pixOwner, terse
+        ? 'Set Consent Mode defaults to denied - with the banner install, not before.'
+        : `Set Consent Mode defaults to denied when the consent banner goes in - not before (${leaking.join(', ')} currently granted). With no banner to grant consent, denied defaults would leave Google tags running cookieless indefinitely, so the two changes ship together.` + where, 30);
+    else if (!defKeys.length && main.gtm && main.gtm.found && hasCmp) push(pixOwner, terse
+      ? 'Add Google Consent Mode defaults, denied by default.'
+      : 'Add Google Consent Mode defaults (none detected) so Google tags start denied until consent.', 30);
   }
 
   // reject violations already covered by bypass on CMP pages; state/site items:
