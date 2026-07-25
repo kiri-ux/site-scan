@@ -524,3 +524,12 @@ banner visibility, Consent Mode, or pre-consent fires.
 ## v0.13.4
 - YouTube checks Google Ads only. Google Analytics belongs to the SEO
   product; without SEO selected, GA surfaces in Other pixels.
+
+## v0.13.5
+- Macro-detection row removed from the capability matrix (macros are
+  Vici-side trafficking hygiene, not a client-facing capability).
+- Hardcoded-pixel remediation note: when a CMP page has pre-consent or
+  after-reject violations, the report names the bypassing vendors and
+  lays out the three fix paths (migrate to GTM + consent procedure,
+  native consent APIs with gtag/fbq specifics, CMP script-blocking),
+  ending with re-scan verification.

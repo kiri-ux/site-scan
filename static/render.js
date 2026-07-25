@@ -176,6 +176,30 @@ function renderSite(r, i){
     }).join('')
     : `<p class="kv">${r.accept_clicked ? 'No product pixels observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';
 
+  // hardcoded-pixel remediation: when a page HAS a CMP but pixels fire
+  // before consent or after reject, they're bypassing it - almost
+  // always hardcoded in the page <head>. Offer the three fix paths,
+  // tailored to the vendors actually caught.
+  const bypassers = [...(r.pre_consent || []).filter(h => h.severity === 'violation'),
+                     ...(r.post_reject || [])];
+  let fixNote = '';
+  if (r.cmps.length && bypassers.length) {
+    const vendors = [...new Set(bypassers.map(h => h.vendor))];
+    const hasMeta = vendors.some(v => /meta|facebook/i.test(v));
+    const hasGoogle = vendors.some(v => /google|doubleclick|floodlight|analytics/i.test(v));
+    const specifics = [
+      hasGoogle ? `Google tags: set <code>gtag('consent','default',{ad_storage:'denied',analytics_storage:'denied',...})</code> BEFORE the tag loads; the CMP sends the 'update' to granted on Accept.` : '',
+      hasMeta ? `Meta Pixel: call <code>fbq('consent','revoke')</code> before <code>init</code>; the CMP calls <code>fbq('consent','grant')</code> on Accept.` : '',
+    ].filter(Boolean);
+    fixNote = `<div class="cm-note warn"><b>Likely hardcoded pixels bypassing the CMP</b> (${vendors.join(', ')}). Fix paths, in order of preference:
+      <ol style="margin:6px 0 0 18px;padding:0">
+        <li>Move the pixels into GTM and apply the GTM consent procedure - triggers then respect consent automatically (this is what the consent setup covers).</li>
+        <li>Native consent APIs in the hardcoded snippets: ${specifics.length ? specifics.join(' ') : 'set the vendor\u2019s consent-default API to denied before the tag initializes, updated to granted by the CMP.'} The default MUST appear above the pixel code.</li>
+        <li>CMP script-blocking: change the snippet to <code>type="text/plain"</code> with the CMP's category attribute so it only executes after opt-in.</li>
+      </ol>
+      Re-scan after any fix - the before/after pair is the verification.</div>`;
+  }
+
   const rejFires = (r.post_reject || []).length ? `<h3>Requests after Reject</h3><ul>` + r.post_reject.map(h =>
       `<li><span class="badge ${h.severity==='violation'?'bad':'warn'}">${h.severity}</span>
         <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
@@ -212,7 +236,7 @@ function renderSite(r, i){
       ${r.verdict === 'error' || r.mode !== 'full' ? `<div class="verdict ${meta.cls}">${(r.verdict_lines && r.verdict_lines.length ? r.verdict_lines : [r.verdict_detail || r.error || '']).map(l => `<div class="vline">${l}</div>`).join('')}</div>` : ''}
       ${kvBits.length || cmStamp ? `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;align-items:center">${cmStamp}${kvBits.join('')}</div>` : ''}
       ${cmNote}
-      <div class="detail">${cmpDetail}${rejFires}${dspDetail}${fires}${gated}</div>
+      <div class="detail">${cmpDetail}${rejFires}${fixNote}${dspDetail}${fires}${gated}</div>
     </div>
   </div>`;
 }
