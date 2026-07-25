@@ -741,3 +741,6 @@ banner visibility, Consent Mode, or pre-consent fires.
   container exists). Other pixels rows carry the suffix, and the
   gating action item names which trackers are which, so the fix
   routing is evidence-based instead of conditional.
+
+## v0.15.16
+- "Cookie notice (notice-only)" renamed "Notice-only banner".

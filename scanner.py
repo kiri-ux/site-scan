@@ -427,7 +427,7 @@ def _full_scan_impl(browser, url, products=None, states=None,
                                             or generic.get("gpp")))
                     if notice_only:
                         result["cmps"].append({
-                            "name": "Cookie notice (notice-only)",
+                            "name": "Notice-only banner",
                             "evidence": ["heuristic: anchored bar with "
                                          "cookie text and an accept/OK "
                                          "button but no reject or "
