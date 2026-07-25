@@ -159,7 +159,7 @@ function actionItemsHtml(rs, impl){
       if (preonly.some(px => px.src === 'runtime')) (gateSet.runtime = gateSet.runtime || new Set()).add(p.product);
     }
     for (const h of [...(r.pre_consent||[]).filter(h => h.severity==='violation'), ...(r.post_reject||[])]){
-      const name = p2p[h.vendor] || h.vendor;
+      const name = h.product || p2p[h.vendor] || h.vendor;
       gateSet.add(name);
       if (h.src === 'page') (gateSet.pageCode = gateSet.pageCode || new Set()).add(name);
       if (h.src === 'runtime') (gateSet.runtime = gateSet.runtime || new Set()).add(name);
@@ -333,7 +333,7 @@ function renderSite(r, i){
   const grouped = [];
   const prodAgg = {};
   for (const h of r.pre_consent || []){
-    const prod = pixToProd[h.vendor];
+    const prod = h.product || pixToProd[h.vendor];
     if (prod){
       if (!prodAgg[prod]){ prodAgg[prod] = {vendor: prod, severity: h.severity, count: 0, agg: true, srcAgg: h.src, contAgg: h.containers || []}; grouped.push(prodAgg[prod]); }
       prodAgg[prod].count++;
@@ -356,9 +356,6 @@ function renderSite(r, i){
   // other tracker doing it, so grade it with the scanner's severity
   // rather than a separate product-only scale. pre_consent is sorted
   // worst-first, so the first hit per vendor is the one that counts.
-  const preHit = {};
-  for (const h of (r.pre_consent || []))
-    if (!(h.vendor in preHit)) preHit[h.vendor] = h;
   const pxBadge = px => {
     if (!px.fired_pre && !px.fired_post)
       return px.configured === true
@@ -366,7 +363,7 @@ function renderSite(r, i){
         : px.configured === false
         ? `<span class="badge bad"${tipAttr('not found')}>not found</span>`
         : `<span class="badge bad"${tipAttr('not seen')}>not seen</span>`;
-    const sev = px.fired_pre ? (preHit[px.name] || {}).severity : null;
+    const sev = px.fired_pre ? px.severity : null;
     if (sev === 'violation') return `<span class="badge bad"${tipAttr('violation')}>violation</span>`;
     if (sev === 'warn') return `<span class="badge warn">warn</span>`;
     if (sev === 'info') return `<span class="badge neutral">info</span>`;
@@ -385,8 +382,8 @@ function renderSite(r, i){
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
         `<li>${pxBadge(px)}<div><b>${px.name}</b>${srcTag(px.src, px.containers)}${(() => {
-          const sev = px.fired_pre ? (preHit[px.name] || {}).severity : null;
-          if (sev === 'warn' || sev === 'info') return ` <span class="evidence">${preHit[px.name].note}</span>`;
+          const sev = px.fired_pre ? px.severity : null;
+          if ((sev === 'warn' || sev === 'info') && px.severity_note) return ` <span class="evidence">${px.severity_note}</span>`;
           return px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}</span>` : '';
         })()}
          ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></div>`;

@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.15.36"
+SCANNER_REV = "0.15.38"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -884,6 +884,19 @@ def _full_scan_impl(browser, url, products=None, states=None,
             hit_url = (post_hit or pre_hit) or ""
             hints = list(px["patterns"]) + CODE_HINTS.get(px["name"], [])
             in_containers = _containers_with(hints, corpora)
+            # Link this pixel to its pre-consent record by URL, not by
+            # name: the two lists name the same pixel differently
+            # (Floodlight vs DoubleClick / Floodlight). Carries the
+            # severity onto the pixel and stamps the product onto the
+            # hit so the report groups it instead of listing it twice.
+            severity = severity_note = None
+            if pre_hit:
+                for _h in result.get("pre_consent") or []:
+                    if _h.get("url") == pre_hit[:220]:
+                        severity = _h.get("severity")
+                        severity_note = _h.get("note")
+                        _h["product"] = prod
+                        break
             configured = None
             if not pre_hit and not post_hit:
                 configured = bool(in_containers) or any(
@@ -900,6 +913,8 @@ def _full_scan_impl(browser, url, products=None, states=None,
                 # fingerprint. Evidence of configuration, not proof of
                 # which one fired - see _containers_with.
                 "containers": in_containers,
+                "severity": severity,
+                "severity_note": severity_note,
                 # Unreplaced trafficking macros like [ORDER] or {orderid}
                 # mean the template was pasted without filling values.
                 "macro_warning": bool(re.search(

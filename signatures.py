@@ -312,4 +312,12 @@ TRACKER_ENDPOINTS = [
     {"vendor": "Google Analytics 4", "patterns": ["google-analytics.com/g/collect", "analytics.google.com/g/collect"], "google": True},
     {"vendor": "Google Ads", "patterns": ["googleadservices.com", "googleads.g.doubleclick.net"], "google": True},
     {"vendor": "DoubleClick / Floodlight", "patterns": ["fls.doubleclick.net", "ad.doubleclick.net"], "google": True},
+    # BARCK+ component pixels. Named to match PRODUCT_PIXELS exactly so
+    # the report groups them under the product instead of listing them
+    # twice. They are ad trackers regardless of who bought the product,
+    # so they are classified on every scan.
+    {"vendor": "Beeswax conversion", "patterns": ["cnv.event.prod.bidr.io"], "google": False},
+    {"vendor": "Beeswax segment", "patterns": ["segment.prod.bidr.io"], "google": False},
+    {"vendor": "Yahoo", "patterns": ["sp.analytics.yahoo.com"], "google": False},
+    {"vendor": "The Trade Desk", "patterns": ["insight.adsrvr.org"], "google": False},
 ]
