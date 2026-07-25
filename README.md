@@ -644,3 +644,6 @@ banner visibility, Consent Mode, or pre-consent fires.
   selection, policy/opt-out links, GPC, hardcoded-pixel migration ->
   client/partner; trafficking macros -> Vici internal. Consent-gating
   items appear only once a CMP exists.
+
+## v0.15.1
+- Action-item ownership badge renamed CLIENT (was CLIENT / PARTNER).
