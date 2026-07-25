@@ -703,3 +703,7 @@ banner visibility, Consent Mode, or pre-consent fires.
   pixels - detail above"), action-item gating and hardcoded-bypass
   lists name the product, and category checks already grouped
   (v0.15.7). Non-product trackers still list individually.
+
+## v0.15.10
+- Removed the "Summary for the main site" hover from the client
+  summary strip.

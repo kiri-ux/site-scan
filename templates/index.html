@@ -818,7 +818,7 @@ function renderGroup(g, cg, verBar){
     </div>
     <div class="rg-body">
       ${verBar}
-      <div class="rg-summary" title="Summary for the main site (shortest URL in this run). Per-page details below.">${chainFor(mainItem(g).r, {states: false})}<div class="detail">${stateChecksHtml(mainItem(g).r)}${(() => {
+      <div class="rg-summary">${chainFor(mainItem(g).r, {states: false})}<div class="detail">${stateChecksHtml(mainItem(g).r)}${(() => {
         let impl = g.items.map(x => x.r.implementation).find(Boolean);
         if (!impl) { const mu = normUrl(mainItem(g).r.url); const s = (schedSites || []).find(x => normUrl(x.url) === mu); impl = s && s.implementation || ''; }
         return actionItemsHtml(g.items.map(x => x.r), impl);
