@@ -548,3 +548,7 @@ banner visibility, Consent Mode, or pre-consent fires.
   (or /privacy href) is present, failing when a tracking site has none
   - the FTC \xc2\xa75 baseline. Presence-only; content accuracy flagged for
   human review in the detail text.
+
+## v0.13.8
+- Capability matrix (tab + one-pager) gains the privacy-policy
+  presence check row, positioned above the state-law map.
