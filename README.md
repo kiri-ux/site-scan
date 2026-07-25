@@ -579,3 +579,8 @@ banner visibility, Consent Mode, or pre-consent fires.
   child-directed tracking (fail on any trackers), financial-context
   warning on ungated fires. Persists through schedule, cron, Edit,
   and shows as a header tag.
+
+## v0.13.13
+- Every qualified matrix cell (the text ones like "integrates",
+  "real users", "honor, don' test") carries a one-line hover
+  explaining why it is not a plain checkmark.
