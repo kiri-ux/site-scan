@@ -768,3 +768,9 @@ banner visibility, Consent Mode, or pre-consent fires.
   meaning), page count and industry tags removed from the bar (both
   live in Edit and the detail). Header alert now also triggers on
   state-check failures, matching the run dots.
+
+## v0.15.20
+- Consent Mode defaults action item folds into the gating item when
+  both would appear - defaults are step 1 of the attached procedure,
+  so it was the same work listed twice. The standalone defaults item
+  survives when no gating item fires.

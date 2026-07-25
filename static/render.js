@@ -151,14 +151,20 @@ function actionItemsHtml(rs, impl){
       body = `${gate.join(', ')}. If they run from a GTM, apply the consent procedure in that container (steps below); if hardcoded in page code, consent-wrap or migrate them${pixOwner === 'UNSET' ? ' (owner per Implementation)' : ''}.`;
     }
     push(pixOwner, `Consent-gate the trackers firing around the banner - the CMP isn't gating them: ${body}${GTM_PROCEDURE}`);
+    var gatePushed = true;
   }
 
   // consent mode defaults
-  const defs = main.consent_defaults || {};
-  const defKeys = Object.keys(defs);
-  const leaking = defKeys.filter(k => defs[k] !== 'denied');
-  if (defKeys.length && leaking.length) push(pixOwner, `Set Consent Mode defaults to denied (${leaking.join(', ')} currently granted).` + (pixOwner==='VICI' ? ' Fixable in the GTM Consent Initialization trigger.' : ' Vici provides the default-consent block; it must load above the tags.'));
-  else if (!defKeys.length && main.gtm && main.gtm.found && hasCmp) push(pixOwner, 'Add Google Consent Mode defaults (none detected) so Google tags start denied until consent.');
+  // Consent Mode defaults are STEP 1 of the consent procedure - when
+  // the gating item (which carries the procedure) is already on the
+  // list, a separate defaults item is the same work listed twice
+  if (typeof gatePushed === 'undefined'){
+    const defs = main.consent_defaults || {};
+    const defKeys = Object.keys(defs);
+    const leaking = defKeys.filter(k => defs[k] !== 'denied');
+    if (defKeys.length && leaking.length) push(pixOwner, `Set Consent Mode defaults to denied (${leaking.join(', ')} currently granted).` + (pixOwner==='VICI' ? ' Fixable in the GTM Consent Initialization trigger.' : ' Vici provides the default-consent block; it must load above the tags.'));
+    else if (!defKeys.length && main.gtm && main.gtm.found && hasCmp) push(pixOwner, 'Add Google Consent Mode defaults (none detected) so Google tags start denied until consent.');
+  }
 
   // reject violations already covered by bypass on CMP pages; state/site items:
   for (const c of (main.state_checks || [])){
