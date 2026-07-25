@@ -89,7 +89,7 @@ function cmBlock(r){
 
 function ownerBadge(owner){
   if (owner === 'VICI') return `<span class="ob ob-vici" data-tip="Vici-side change - the buyer makes this fix directly">VICI</span>`;
-  if (owner === 'CLIENT') return `<span class="ob ob-ext" data-tip="Client-side change - Vici provides the corrected snippet or spec; the client's web team installs it">CLIENT</span>`;
+  if (owner === 'CLIENT') return `<span class="ob ob-ext">CLIENT</span>`;
   return `<span class="ob ob-un" data-tip="Owner depends on who manages the tags - set Implementation (Vici-owned GTM vs Client placement) on the scan form to resolve">SET IMPLEMENTATION</span>`;
 }
 
