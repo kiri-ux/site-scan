@@ -647,3 +647,7 @@ banner visibility, Consent Mode, or pre-consent fires.
 
 ## v0.15.1
 - Action-item ownership badge renamed CLIENT (was CLIENT / PARTNER).
+
+## v0.15.2
+- Implementation is a proper dropdown select (Not set / Vici-owned
+  GTM / Client placement) instead of chips that could render empty.

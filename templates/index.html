@@ -290,8 +290,12 @@
   <div class="ms-list" id="ind-list" style="display:none"></div>
 </div>
 <div class="chips" id="ind-selected" style="margin-top:6px"></div>
-    <label class="field-label" style="margin-top:12px">Implementation <span class="opt">(who manages this client's tags - drives action-item ownership)</span></label>
-    <div class="chips" id="impl-chips"></div>
+    <label class="field-label" style="margin-top:12px" for="impl-select">Implementation <span class="opt">(who manages this client's tags - drives action-item ownership)</span></label>
+    <select id="impl-select" class="text-input" style="max-width:340px">
+      <option value="">&mdash; Not set &mdash;</option>
+      <option value="Vici-owned GTM">Vici-owned GTM</option>
+      <option value="Client placement">Client placement (pixels provided to client)</option>
+    </select>
     <label class="field-label" for="site-url">Client website</label>
     <input id="site-url" type="text" class="text-input" placeholder="clientsite.com">
     <label class="field-label" for="conv-input">Conversion URLs to check <span class="opt">(optional - landing pages, thank-you pages. Type or paste, Enter to add)</span></label>
@@ -423,13 +427,7 @@ let dbEnabled = false;
 const PRODUCTS = ['Amazon','BARCK+','LinkedIn','Meta','Mobile','PPC','Performance Max','SEO','TikTok','WVID','YouTube'];
 const INDUSTRIES = {{ industries_json|safe }};
 let selectedIndustries = [];
-const IMPLEMENTATIONS = ['Vici-owned GTM', 'Client placement'];
-let selectedImplementation = '';
-function renderImplChips(){
-  $('impl-chips').innerHTML = IMPLEMENTATIONS.map(m =>
-    `<button type="button" class="chip ${selectedImplementation===m?'on':''}" onclick="toggleImpl('${m.replace(/'/g,"\\'")}')">${m}</button>`).join('');
-}
-function toggleImpl(m){ selectedImplementation = selectedImplementation === m ? '' : m; renderImplChips(); }
+
 function renderIndList(){
   const q = $('ind-search').value.trim().toLowerCase();
   const hits = INDUSTRIES.filter(i => !q || i.toLowerCase().includes(q)).slice(0, 60);
@@ -676,7 +674,7 @@ function editSite(i){
   $('client-name').value = s.client_name || '';
   $('partner-name').value = s.partner_name || '';
   selectedIndustries = (s.industries || []).slice(); renderIndSelected(); renderIndList();
-  selectedImplementation = s.implementation || ''; renderImplChips();
+  $('impl-select').value = s.implementation || '';
   $('site-url').value = s.url;
   convUrls = sanitizeConvList(s.conversion_urls); renderConvPills();
   selectedProducts = [...(s.products || [])];
@@ -685,7 +683,7 @@ function editSite(i){
   renderChips();
   renderStateChips();
   showTab('scan');
-  renderIndSelected(); renderImplChips();
+  renderIndSelected();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 async function upsertClient(frequency, btn){
@@ -698,7 +696,7 @@ async function upsertClient(frequency, btn){
       products: selectedProducts, states: selectedStates, conversion_urls: conv,
       include_conversions: true, client_name: $('client-name').value.trim(),
       partner_name: $('partner-name').value.trim(), industries: selectedIndustries,
-      implementation: selectedImplementation})});
+      implementation: $('impl-select').value})});
   if (resp.ok && btn){
     const label = btn.textContent;
     btn.textContent = 'Saved \u2713';
@@ -849,7 +847,7 @@ function editRun(key){
   $('client-name').value = g.name || '';
   $('partner-name').value = g.items.map(x => x.r.partner_name).find(Boolean) || '';
   selectedIndustries = (g.items.map(x => x.r.industries).find(a => a && a.length) || []).slice(); renderIndSelected(); renderIndList();
-  selectedImplementation = g.items.map(x => x.r.implementation).find(Boolean) || ''; renderImplChips();
+  $('impl-select').value = g.items.map(x => x.r.implementation).find(Boolean) || '';
   $('site-url').value = main.r.url;
   convUrls = sanitizeConvList(g.items.filter(it => it !== main).map(it => it.r.url)); renderConvPills();
   // selected products = products reported on the main page (selection mode
@@ -860,7 +858,7 @@ function editRun(key){
   renderChips();
   renderStateChips();
   showTab('scan');
-  renderIndSelected(); renderImplChips();
+  renderIndSelected();
   window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
@@ -936,7 +934,7 @@ async function run(){
         const resp = await fetch('/scan', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === 0, run_id: runId, client_name: clientName, partner_name: partnerName, industries: selectedIndustries, implementation: selectedImplementation}),
+          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === 0, run_id: runId, client_name: clientName, partner_name: partnerName, industries: selectedIndustries, implementation: $('impl-select').value}),
           signal: ctrl.signal,
         });
         clearTimeout(timer);
