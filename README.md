@@ -733,3 +733,11 @@ banner visibility, Consent Mode, or pre-consent fires.
 - Info hover glyph redrawn as a clean 13px circled-i badge (CSS
   circle, Barlow lowercase i) - the unicode &#9432; rendered wonky
   next to condensed uppercase labels.
+
+## v0.15.15
+- Pixel source detection: each pre-consent hit is classified as
+  hardcoded (vendor host/snippet present in raw page source) or
+  injected at runtime (fired with no trace in source - GTM-side when a
+  container exists). Other pixels rows carry the suffix, and the
+  gating action item names which trackers are which, so the fix
+  routing is evidence-based instead of conditional.

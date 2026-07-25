@@ -110,8 +110,19 @@ function actionItemsHtml(rs, impl){
     if (!(r.cmps||[]).length) continue;
     const p2p = {};
     for (const p of (r.products||[])) for (const px of (p.pixels||[])) p2p[px.name] = p.product;
-    for (const p of (r.products||[])) if ((p.pixels||[]).some(px => px.fired_pre && !px.fired_post)) gateSet.add(p.product);
-    for (const h of [...(r.pre_consent||[]).filter(h => h.severity==='violation'), ...(r.post_reject||[])]) gateSet.add(p2p[h.vendor] || h.vendor);
+    for (const p of (r.products||[])){
+      const preonly = (p.pixels||[]).filter(px => px.fired_pre && !px.fired_post);
+      if (!preonly.length) continue;
+      gateSet.add(p.product);
+      if (preonly.some(px => px.src === 'page')) (gateSet.pageCode = gateSet.pageCode || new Set()).add(p.product);
+      if (preonly.some(px => px.src === 'runtime')) (gateSet.runtime = gateSet.runtime || new Set()).add(p.product);
+    }
+    for (const h of [...(r.pre_consent||[]).filter(h => h.severity==='violation'), ...(r.post_reject||[])]){
+      const name = p2p[h.vendor] || h.vendor;
+      gateSet.add(name);
+      if (h.src === 'page') (gateSet.pageCode = gateSet.pageCode || new Set()).add(name);
+      if (h.src === 'runtime') (gateSet.runtime = gateSet.runtime || new Set()).add(name);
+    }
   }
   const gate = [...gateSet];
   if (hasCmp && gate.length){
@@ -120,7 +131,12 @@ function actionItemsHtml(rs, impl){
       : pixOwner === 'CLIENT'
       ? "If they run from the client's GTM, the client's team applies the consent procedure in that container (steps below); if hardcoded in page code, Vici provides consent-wrapped snippets or migrates them into GTM."
       : 'If they run from a GTM, apply the consent procedure in that container (steps below); if hardcoded in page code, consent-wrap or migrate them (owner per Implementation).';
-    push(pixOwner, `Consent-gate the trackers firing around the banner (${gate.join(', ')}) - before consent or after reject, the CMP isn't gating them. ${where}${GTM_PROCEDURE}`);
+    const pageCode = [...(gateSet.pageCode || [])];
+    const runtime = [...(gateSet.runtime || [])].filter(v => !gateSet.pageCode || !gateSet.pageCode.has(v));
+    const detected = (pageCode.length || runtime.length)
+      ? ` Detected: ${[pageCode.length ? `${pageCode.join(', ')} hardcoded in page source` : '', runtime.length ? `${runtime.join(', ')} injected at runtime${rs.some(r=>r.gtm&&r.gtm.found) ? ' (GTM-side)' : ''}` : ''].filter(Boolean).join('; ')}.`
+      : '';
+    push(pixOwner, `Consent-gate the trackers firing around the banner (${gate.join(', ')}) - before consent or after reject, the CMP isn't gating them.${detected} ${where}${GTM_PROCEDURE}`);
   }
 
   // consent mode defaults
@@ -280,7 +296,7 @@ function renderSite(r, i){
       ? `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='violation' ? tipAttr('violation') : tipAttr('ungated')}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
         <div><b>${h.vendor}</b> <span class="evidence">${h.count} component pixel${h.count>1?'s':''} - per-pixel detail in Product pixels above</span></div></li>`
       : `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='ungated' ? tipAttr('ungated') : h.severity==='violation' ? tipAttr('violation') : ''}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
-        <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+        <div><b>${h.vendor}</b> <span class="evidence">${h.note}${h.src === 'page' ? ' &middot; hardcoded in page source' : h.src === 'runtime' ? ' &middot; injected at runtime' : ''}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Other pixels</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
   const hasCmp = (r.cmps || []).length > 0;
@@ -302,7 +318,7 @@ function renderSite(r, i){
       const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected} firing</span>` : '';
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
-        `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}</span>` : ''}${px.macro_warning ? ' <span class="macro-warn">pixel URL contains unreplaced macros like [ORDER] - the template was pasted without filling values, so conversion data will be blank</span>' : ''}
+        `<li>${pxBadge(px)}<div><b>${px.name}</b>${px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}${px.src === 'page' ? ' &middot; hardcoded in page source' : px.src === 'runtime' ? ' &middot; injected at runtime' : ''}</span>` : ''}${px.macro_warning ? ' <span class="macro-warn">pixel URL contains unreplaced macros like [ORDER] - the template was pasted without filling values, so conversion data will be blank</span>' : ''}
          ${px.sample_url ? `<div class="u">${px.sample_url}</div>` : ''}</div></li>`).join('') + `</ul></div>`;
     }).join('')
     : `<p class="kv">${r.accept_clicked ? 'No product pixels observed on this page, before or after accept.' : 'Accept could not be clicked, so post-consent firing could not be verified on this page.'}</p>`) : '';
@@ -333,7 +349,7 @@ function renderSite(r, i){
 
   const rejFires = (r.post_reject || []).length ? `<h3>Requests after Reject</h3><ul>` + r.post_reject.map(h =>
       `<li><span class="badge ${h.severity==='violation'?'bad':'warn'}">${h.severity}</span>
-        <div><b>${h.vendor}</b> <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+        <div><b>${h.vendor}</b> <span class="evidence">${h.note}${h.src === 'page' ? ' &middot; hardcoded in page source' : h.src === 'runtime' ? ' &middot; injected at runtime' : ''}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.reject_tested ? `<h3>Requests after Reject</h3><p class="kv">No trackers fired after Reject - the decline path is honored.</p>` : '');
 
   const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>

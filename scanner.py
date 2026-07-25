@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.15.7"
+SCANNER_REV = "0.15.15"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -228,6 +228,37 @@ def basic_scan(url, result=None):
 
 # ---------------------------------------------------------------- tier 2
 
+# script hosts a hardcoded snippet would reference in raw HTML, per
+# vendor family (beacon endpoints often differ from the include host)
+_SCRIPT_MARKERS = {
+    "Meta Pixel": ["connect.facebook.net", "fbq("],
+    "Google Analytics 4": ["gtag/js?id=", "gtag('config'", 'gtag("config"'],
+    "Google Ads": ["gtag/js?id=aw-", "googleadservices.com/pagead/conversion"],
+    "TikTok Pixel": ["analytics.tiktok.com", "ttq.load"],
+    "Snapchat Pixel": ["sc-static.net", "snaptr("],
+    "LinkedIn Insight": ["snap.licdn.com", "_linkedin_partner_id"],
+    "Pinterest Tag": ["s.pinimg.com/ct", "pintrk("],
+    "Amazon Ad Tag": ["c.amazon-adsystem.com", "amzn("],
+}
+
+
+def _pixel_source(vendor, req_url, low_html):
+    """'page' when the vendor's snippet/host is in the raw HTML
+    (hardcoded), 'runtime' when it fired but left no trace in source
+    (injected - by GTM when one is present)."""
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(req_url).netloc.lower()
+        if host and host in low_html:
+            return "page"
+        for m in _SCRIPT_MARKERS.get(vendor, []):
+            if m in low_html:
+                return "page"
+    except Exception:
+        return None
+    return "runtime"
+
+
 def _generic_banner_probe(page):
     """Anchored element with consent text + accept/reject button, and
     IAB API presence. Used when no CMP signature matches, and as a
@@ -285,7 +316,7 @@ def _full_scan_impl(browser, url, products=None, states=None,
         page.route("**/*", _route)
 
         try:
-            page.goto(url, wait_until="domcontentloaded",
+            _nav_resp = page.goto(url, wait_until="domcontentloaded",
                       timeout=PAGE_TIMEOUT_MS)
             try:
                 page.wait_for_load_state("networkidle",
@@ -304,6 +335,11 @@ def _full_scan_impl(browser, url, products=None, states=None,
 
         result["ok"] = True
         html = page.content()
+        try:  # raw server HTML (pre-JS) - live DOM would show injected
+              # scripts as if hardcoded
+            raw_low = (_nav_resp.text() or "").lower() if _nav_resp else ""
+        except Exception:
+            raw_low = ""
 
         # --- CMP detection: domains in rendered DOM + network + globals + cookies
         evidence_by_cmp = {}
@@ -551,7 +587,9 @@ def _full_scan_impl(browser, url, products=None, states=None,
                             "Fired AFTER the user clicked Reject.")
                     result["post_reject"].append(
                         {"vendor": tracker["vendor"], "url": u[:220],
-                         "severity": sev, "note": note})
+                         "severity": sev, "note": note,
+                         "src": _pixel_source(tracker["vendor"], u,
+                                              raw_low)})
         except Exception:
             pass
         finally:
@@ -726,6 +764,7 @@ def _full_scan_impl(browser, url, products=None, states=None,
             "url": req_url[:220],
             "severity": severity,
             "note": note,
+            "src": _pixel_source(tracker["vendor"], req_url, raw_low),
         })
 
     result["pre_consent"].sort(
@@ -783,6 +822,8 @@ def _full_scan_impl(browser, url, products=None, states=None,
                 "fired_post": bool(post_hit),
                 "configured": configured,
                 "sample_url": hit_url[:220],
+                "src": (_pixel_source(px["name"], hit_url, raw_low)
+                        if hit_url else None),
                 # Unreplaced trafficking macros like [ORDER] or {orderid}
                 # mean the template was pasted without filling values.
                 "macro_warning": bool(re.search(
