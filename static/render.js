@@ -107,11 +107,14 @@ function actionItemsHtml(rs, impl){
   const pixOwner = impl === 'Vici-owned GTM' ? 'VICI' : impl === 'Client placement' ? 'CLIENT' : 'UNSET';
   const main = rs.slice().sort((a,b) => (a.url||'').length - (b.url||'').length)[0];
   const items = [];
-  const push = (owner, text) => items.push({owner, text});
+  // rank = dependency order within an owner's list; lower runs first.
+  // 10 banner (everything below assumes it exists) - 20 gating -
+  // 30 Consent Mode - 40 pixels - 60+ independent site items.
+  const push = (owner, text, rank = 50) => items.push({owner, text, rank, seq: items.length});
 
   // product pixels missing anywhere
   const missing = [...new Set(rs.flatMap(r => (r.products||[]).filter(p => p.fired === 0).map(p => p.product)))];
-  if (missing.length) push(pixOwner, `Install or repair the ${missing.join(', ')} pixel${missing.length>1?'s':''} - expected but not seen on any scanned page.` + (pixOwner==='CLIENT' ? ' Vici supplies the pixel code.' : ''));
+  if (missing.length) push(pixOwner, `Install or repair the ${missing.join(', ')} pixel${missing.length>1?'s':''} - expected but not seen on any scanned page.` + (pixOwner==='CLIENT' ? ' Vici supplies the pixel code.' : ''), 40);
 
   const hasCmp = (main.cmps||[]).length > 0;
   // no CMP: what the LAW requires is a working opt-out method - a
@@ -136,14 +139,14 @@ function actionItemsHtml(rs, impl){
       const fix = noticeOnly
         ? 'Recommended fix: replace the notice-only bar with a real consent banner (CMP)'
         : 'Recommended fix: a consent banner (CMP)';
-      push('CLIENT', `Give residents a working opt-out method - required for ${mechStates.join(' & ')} targeting and currently absent (${absent}). ${fix}, which delivers the opt-out link, GPC handling, and pixel gating in one install - the law requires the opt-out, not the banner itself. ${followUp}${GTM_PROCEDURE}`);
+      push('CLIENT', `Give residents a working opt-out method - required for ${mechStates.join(' & ')} targeting and currently absent (${absent}). ${fix}, which delivers the opt-out link, GPC handling, and pixel gating in one install - the law requires the opt-out, not the banner itself. ${followUp}${GTM_PROCEDURE}`, 10);
     } else {
       const followUp2 = pixOwner === 'VICI'
         ? 'Vici applies the consent procedure in the GTM once one is in place (steps below).'
         : pixOwner === 'CLIENT'
         ? "The client's team applies the consent procedure in their container once one is in place (steps below)."
         : 'The consent procedure gates the pixels once one is in place (steps below; owner per Implementation).';
-      push('CLIENT', `Recommended (not required): install a consent banner (CMP) to gate pixels and cover current and future state targeting. ${followUp2}${GTM_PROCEDURE}`);
+      push('CLIENT', `Recommended (not required): install a consent banner (CMP) to gate pixels and cover current and future state targeting. ${followUp2}${GTM_PROCEDURE}`, 10);
     }
   }
   // ONE gating item for everything firing around the banner: product
@@ -197,7 +200,7 @@ function actionItemsHtml(rs, impl){
     const why = gStates.length
       ? ` Flagged for ${gStates.join(' & ')} targeting, where a resident's opt-out has to take effect.`
       : ' No states are selected for this client, so this is not flagged as a state-law requirement. It still matters: the banner offers Reject and these trackers fire anyway.';
-    push(pixOwner, `Consent-gate the trackers firing around the banner - the CMP isn't gating them: ${body}${body.endsWith('.') ? '' : '.'}${why}${GTM_PROCEDURE}`);
+    push(pixOwner, `Consent-gate the trackers firing around the banner - the CMP isn't gating them: ${body}${body.endsWith('.') ? '' : '.'}${why}${GTM_PROCEDURE}`, 20);
     var gatePushed = true;
   }
 
@@ -213,28 +216,35 @@ function actionItemsHtml(rs, impl){
       ? ' Fixable in the GTM Consent Initialization trigger.'
       : ' Vici provides the default-consent block; it must load above the tags.';
     if (defKeys.length && leaking.length && hasCmp)
-      push(pixOwner, `Set Consent Mode defaults to denied (${leaking.join(', ')} currently granted).` + where);
+      push(pixOwner, `Set Consent Mode defaults to denied (${leaking.join(', ')} currently granted).` + where, 30);
     else if (defKeys.length && leaking.length)
       // No banner means nothing would ever grant consent, so denied
       // defaults would leave the Google tags limited indefinitely.
-      push(pixOwner, `Set Consent Mode defaults to denied when the consent banner goes in - not before (${leaking.join(', ')} currently granted). With no banner to grant consent, denied defaults would leave Google tags running cookieless indefinitely, so the two changes ship together.` + where);
-    else if (!defKeys.length && main.gtm && main.gtm.found && hasCmp) push(pixOwner, 'Add Google Consent Mode defaults (none detected) so Google tags start denied until consent.');
+      push(pixOwner, `Set Consent Mode defaults to denied when the consent banner goes in - not before (${leaking.join(', ')} currently granted). With no banner to grant consent, denied defaults would leave Google tags running cookieless indefinitely, so the two changes ship together.` + where, 30);
+    else if (!defKeys.length && main.gtm && main.gtm.found && hasCmp) push(pixOwner, 'Add Google Consent Mode defaults (none detected) so Google tags start denied until consent.', 30);
   }
 
   // reject violations already covered by bypass on CMP pages; state/site items:
   for (const c of (main.state_checks || [])){
     if (c.status !== 'fail') continue;
-    if (c.check === 'Privacy policy link') push('CLIENT', 'Add an accessible privacy policy link - none found on the page.');
-    if (c.check === 'Opt-out link' && !mechFail) push('CLIENT', 'Add a "Your Privacy Choices" / opt-out link to the site footer.');
-    if (c.check === 'GPC signal') push('CLIENT', 'Honor the Global Privacy Control signal - typically CMP configuration once a banner exists' + (hasCmp ? '.' : ' (part of the CMP conversation above).'));
-    if (c.check === 'Health-context tracking') push('CLIENT', "Get a documented decision from the client's legal/compliance owner on whether ad pixels may run on this site, and on which pages. Pixel payloads include page URLs, so on a health-context site the ad platforms receive health-related browsing data - sensitive data requiring OPT-IN consent in most states. Their options: run as-is, restrict pixels to non-sensitive pages, opt-in gate them, or remove them. Vici supplies this report as the evidence and implements whatever they decide.");
-    if (c.check === 'Child-directed tracking') push('CLIENT', "Get a documented decision from the client's legal/compliance owner before any trackers run on this child-directed site - COPPA requires verifiable parental consent (a banner doesn't satisfy it), and behavioral advertising to children is the FTC's most enforced tracking rule. Default recommendation: remove ad trackers entirely; Vici implements whatever they decide.");
+    if (c.check === 'Privacy policy link') push('CLIENT', 'Add an accessible privacy policy link - none found on the page.', 60);
+    if (c.check === 'Opt-out link' && !mechFail) push('CLIENT', 'Add a "Your Privacy Choices" / opt-out link to the site footer.', 60);
+    if (c.check === 'GPC signal') push('CLIENT', 'Honor the Global Privacy Control signal - typically CMP configuration once a banner exists' + (hasCmp ? '.' : ' (part of the CMP conversation above).'), 60);
+    if (c.check === 'Health-context tracking') push('CLIENT', "Get a documented decision from the client's legal/compliance owner on whether ad pixels may run on this site, and on which pages. Pixel payloads include page URLs, so on a health-context site the ad platforms receive health-related browsing data - sensitive data requiring OPT-IN consent in most states. Their options: run as-is, restrict pixels to non-sensitive pages, opt-in gate them, or remove them. Vici supplies this report as the evidence and implements whatever they decide.", 70);
+    if (c.check === 'Child-directed tracking') push('CLIENT', "Get a documented decision from the client's legal/compliance owner before any trackers run on this child-directed site - COPPA requires verifiable parental consent (a banner doesn't satisfy it), and behavioral advertising to children is the FTC's most enforced tracking rule. Default recommendation: remove ad trackers entirely; Vici implements whatever they decide.", 70);
   }
 
   if (!items.length) return '';
   // dedupe identical opt-out/GPC lines that repeat per state group
   const seen = new Set();
   const rows = items.filter(it => { const k = it.owner + it.text; if (seen.has(k)) return false; seen.add(k); return true; });
+  // Group each owner's work together so nobody reads past items that
+  // aren't theirs. The owner holding the earliest dependency leads.
+  const best = {};
+  for (const it of rows) best[it.owner] = Math.min(best[it.owner] ?? 99, it.rank);
+  rows.sort((a, b) => (best[a.owner] - best[b.owner])
+                   || (a.owner < b.owner ? -1 : a.owner > b.owner ? 1 : 0)
+                   || (a.rank - b.rank) || (a.seq - b.seq));
   return `<h3>Action items</h3><ul class="ai">` + rows.map(it =>
     `<li>${ownerBadge(it.owner)}<div>${it.text}</div></li>`).join('') + `</ul>`;
 }
