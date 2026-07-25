@@ -115,17 +115,17 @@ function actionItemsHtml(rs, impl){
     if (mechFail){
       const mechStates = (main.state_checks || []).filter(c => c.check === 'Opt-out mechanism' && c.status === 'fail').map(c => c.state);
       const followUp = pixOwner === 'VICI'
-        ? 'Once one is in place, Vici applies the GTM consent procedure.'
+        ? 'Once one is in place, Vici applies the consent procedure in the GTM (steps below).'
         : pixOwner === 'CLIENT'
-        ? "Once one is in place, Vici provides the GTM consent procedure for the client's team to apply."
-        : 'Once one is in place, the GTM consent procedure gates the pixels (owner per Implementation).';
+        ? "Once one is in place, the client's team applies the consent procedure in their container (steps below)."
+        : 'Once one is in place, the consent procedure gates the pixels (steps below; owner per Implementation).';
       push('CLIENT', `Give residents a working opt-out method - required for ${mechStates.join(' & ')} targeting and currently absent (no banner, no opt-out link, GPC not honored). Recommended fix: a consent banner (CMP), which delivers the opt-out link, GPC handling, and pixel gating in one install - the law requires the opt-out, not the banner itself. ${followUp}${GTM_PROCEDURE}`);
     } else {
       const followUp2 = pixOwner === 'VICI'
-        ? 'Vici applies the GTM consent procedure once one is in place.'
+        ? 'Vici applies the consent procedure in the GTM once one is in place (steps below).'
         : pixOwner === 'CLIENT'
-        ? "Vici provides the GTM consent procedure for the client's team to apply once one is in place."
-        : 'The GTM consent procedure gates the pixels once one is in place.';
+        ? "The client's team applies the consent procedure in their container once one is in place (steps below)."
+        : 'The consent procedure gates the pixels once one is in place (steps below; owner per Implementation).';
       push('CLIENT', `Recommended (not required): install a consent banner (CMP) to gate pixels and cover current and future state targeting. ${followUp2}${GTM_PROCEDURE}`);
     }
   }
