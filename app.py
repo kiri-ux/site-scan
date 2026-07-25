@@ -36,7 +36,7 @@ def _extract_conv_urls(chunk):
             out.append(u)
     return out
 from signatures import PRODUCT_NAMES
-from state_checks import STATE_CODES
+from state_checks import STATE_CODES, STATE_CHECKS, LAST_REVIEWED
 
 app = Flask(__name__)
 
@@ -106,7 +106,10 @@ except Exception as e:  # DB down shouldn't kill the app - fall back to local
 
 @app.get("/")
 def index():
-    return render_template("index.html", build=BUILD, deployed=DEPLOYED)
+    import json as _json
+    return render_template("index.html", build=BUILD, deployed=DEPLOYED,
+                           states_json=_json.dumps(STATE_CHECKS),
+                           states_reviewed=LAST_REVIEWED)
 
 
 @app.post("/scan")

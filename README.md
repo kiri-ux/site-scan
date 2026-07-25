@@ -533,3 +533,11 @@ banner visibility, Consent Mode, or pre-consent fires.
   lays out the three fix paths (migrate to GTM + consent procedure,
   native consent APIs with gtag/fbq specifics, CMP script-blocking),
   ending with re-scan verification.
+
+## v0.13.6
+- "US tracking laws" slide-out panel: the every-site baseline (FTC
+  deception, opt-out regime, honor-the-no, GPC, COPPA, wiretap risk),
+  what the scanner checks against it, and a per-state expander
+  generated live from state_checks.py - so the panel can never drift
+  from what the scanner enforces. Review date + not-legal-advice
+  footer built in.

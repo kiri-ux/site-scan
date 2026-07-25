@@ -221,6 +221,23 @@
   .cm-note{border-radius:8px;padding:9px 12px;font-size:13px;line-height:1.5;margin-bottom:8px}
   .cm-note.ok{background:var(--ok-bg,#E7F4ED);color:var(--ok,#1F7A4D)}
   .cm-note.warn{background:var(--warn-bg,#FBF1D9);color:var(--warn,#9A6A00)}
+  #laws-panel{position:fixed;top:0;right:0;bottom:0;width:min(520px,94vw);background:var(--parchment);border-left:4px solid var(--gold);box-shadow:-8px 0 30px rgba(0,45,88,.25);transform:translateX(105%);transition:transform .25s;z-index:500;display:flex;flex-direction:column}
+  #laws-panel.open{transform:translateX(0)}
+  .lp-head{background:var(--atlas);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
+  .lp-head h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:19px;letter-spacing:.05em;text-transform:uppercase;margin:0}
+  .lp-close{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1}
+  .lp-body{overflow-y:auto;padding:16px 20px;font-size:13.5px;line-height:1.55}
+  .lp-body h3{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:.05em;text-transform:uppercase;color:var(--atlas);border-bottom:2px solid var(--gold);padding-bottom:4px;margin:14px 0 8px}
+  .lp-body ul{padding-left:18px;margin:0 0 10px}
+  .lp-body li{margin-bottom:6px}
+  .lp-state{border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:8px}
+  .lp-state summary{cursor:pointer;padding:9px 12px;font-weight:600;display:flex;align-items:center;gap:8px;list-style:none}
+  .lp-state summary::-webkit-details-marker{display:none}
+  .lp-state .lp-tags{margin-left:auto;display:flex;gap:5px}
+  .lp-state .lp-tag{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.05em;border-radius:4px;padding:1px 7px;background:#FBF3DC;color:#8A6A10}
+  .lp-state .lp-detail{padding:0 12px 10px;color:var(--ink)}
+  .lp-state .lp-detail .cite{font-size:12px;color:var(--muted)}
+  .lp-foot{border-top:1px solid var(--line);padding:10px 20px;font-size:11.5px;color:var(--muted)}
   .cm-stamp{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.07em;border-radius:6px;padding:4px 11px;white-space:nowrap}
   .cm-stamp.ok{background:var(--ok,#1F7A4D);color:#fff}
   .cm-stamp.bad{background:var(--bad,#B3261E);color:#fff}
@@ -238,6 +255,7 @@
   <button class="tab on" id="tab-scan" onclick="showTab('scan')">Scan</button>
   <button class="tab" id="tab-recurring" onclick="showTab('recurring')">Recurring scans</button>
   <button class="tab gold" id="tab-market" onclick="showTab('market')">Build vs market</button>
+  <button class="tab" id="laws-toggle" onclick="toggleLaws()" style="margin-left:auto">US tracking laws &#9662;</button>
 </nav>
 
 <main>
@@ -476,6 +494,49 @@ async function restoreResults(){
 }
 
 // ---- recurring scan schedule ----
+
+function toggleLaws(){
+  const p = $('laws-panel');
+  const open = !p.classList.contains('open');
+  if (open && !p.dataset.built){ buildLawsPanel(); p.dataset.built = '1'; }
+  p.classList.toggle('open', open);
+  p.setAttribute('aria-hidden', String(!open));
+}
+function buildLawsPanel(){
+  const baseline = `
+    <h3>Every US site - the baseline</h3>
+    <ul>
+      <li><b>There is no single federal privacy law</b> for general tracking - the rules are state comprehensive privacy laws (20 mapped below) plus federal hooks that apply everywhere.</li>
+      <li><b>Say what you do, do what you say.</b> FTC Act &sect;5 applies to every site in the country: a privacy policy that misdescribes your tracking or sharing is a deceptive practice, regardless of state.</li>
+      <li><b>The US is an opt-OUT regime.</b> No state requires a consent banner before tracking (that's GDPR). What covered states require: tell people, give them a working way to opt out, and honor it.</li>
+      <li><b>Honor the no.</b> Where a resident opts out - via a link, a preference center, or the browser's Global Privacy Control signal (required in 12+ states) - continuing to sell/share their data is the violation enforcement targets.</li>
+      <li><b>Children are opt-IN everywhere.</b> COPPA (federal) requires verifiable parental consent before collecting data from under-13s - the one true consent-first rule in US law.</li>
+      <li><b>Session recording and chat tools carry wiretap risk.</b> State wiretap statutes (notably California's CIPA) power a live wave of lawsuits over undisclosed session-replay and chat tracking - disclose these in the policy.</li>
+    </ul>
+    <h3>What the scanner checks against this</h3>
+    <ul>
+      <li>Pre-consent and after-reject pixel behavior (honoring the no)</li>
+      <li>GPC signal handling in the states that mandate it</li>
+      <li>Opt-out link presence, and the opt-out mechanism check (no CMP + no link + GPC ignored = no way to opt out at all)</li>
+      <li>Google Consent Mode defaults (correct vs leaking vs not configured)</li>
+    </ul>
+    <h3>State-by-state</h3>`;
+  const states = Object.keys(STATE_LAWS).sort().map(code => {
+    const s = STATE_LAWS[code];
+    const tags = [s.gpc ? '<span class="lp-tag">GPC required</span>' : '',
+                  s.optout_link ? '<span class="lp-tag">opt-out link</span>' : ''].join('');
+    const bits = [
+      `<div><b>${s.law}</b></div>`,
+      s.gpc ? `<div>Universal opt-out signals (GPC) must be honored${s.gpc_effective ? ` - ${s.gpc_effective}` : ''}.</div>` : `<div>GPC honoring not (yet) mandated; opt-out must still be available and honored.</div>`,
+      s.optout_link ? `<div>An accessible opt-out method/link is expected for residents.</div>` : '',
+      s.notes ? `<div>${s.notes}</div>` : '',
+      s.cite ? `<div class="cite">${s.cite}</div>` : '',
+    ].filter(Boolean).join('');
+    return `<details class="lp-state"><summary>${code} &middot; ${s.name}<span class="lp-tags">${tags}</span></summary><div class="lp-detail">${bits}</div></details>`;
+  }).join('');
+  $('lp-body').innerHTML = baseline + states;
+}
+
 function showTab(which){
   $('view-scan').style.display = which === 'scan' ? 'block' : 'none';
   $('view-recurring').style.display = which === 'recurring' ? 'block' : 'none';
@@ -877,6 +938,12 @@ renderStateChips();
 restoreResults();
 loadSchedule();
 </script>
+<aside id="laws-panel" aria-hidden="true">
+  <div class="lp-head"><h2>US Online Tracking Laws</h2><button class="lp-close" onclick="toggleLaws()" aria-label="Close">&times;</button></div>
+  <div class="lp-body" id="lp-body"></div>
+  <div class="lp-foot">Check-based summaries for scan interpretation - not legal advice. State map last reviewed {{ states_reviewed }}; counsel review pending. Sources: state statutes and regulator guidance cited per state.</div>
+</aside>
+<script>const STATE_LAWS = {{ states_json|safe }};</script>
 <div id="tipbox" role="tooltip"></div>
 <script>
 (function(){
