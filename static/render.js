@@ -409,9 +409,12 @@ function groupBadge(items){
   let worst = 2;
   items.forEach(({r}) => { worst = Math.min(worst, VERDICT_RANK[r.verdict] ?? 0); });
   const anyMissing = items.some(({r}) => (r.products||[]).some(p => p.fired === 0));
-  if (worst === 0 || anyMissing) return '<span class="badge bad">needs attention</span>';
-  if (worst === 1) return '<span class="badge neutral">basic</span>';
-  return '<span class="badge ok">looks good</span>';
+  const anyStateFail = items.some(({r}) => (r.state_checks||[]).some(c => c.status === 'fail'));
+  if (worst === 0 || anyMissing || anyStateFail)
+    return `<span class="st-ico bad" data-tip="Needs attention - open for findings and action items"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.6 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13.5"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg></span>`;
+  if (worst === 1)
+    return `<span class="st-ico mid" data-tip="Basic scan only - full details unavailable"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg></span>`;
+  return `<span class="st-ico ok" data-tip="Looks good - no findings on the latest run"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.2 12.4 2.6 2.6 5-5.4"/></svg></span>`;
 }
 
 function mainItem(g){

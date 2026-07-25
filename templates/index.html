@@ -160,6 +160,10 @@
   .rungroup{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden}
   .rg-head{display:flex;align-items:center;gap:12px;padding:14px 18px;cursor:pointer;border-left:4px solid var(--gold)}
   .rg-head:hover{background:#FAFAF7}
+  .st-ico{display:inline-flex;flex:none}
+  .st-ico.bad{color:var(--bad,#B3261E)}
+  .st-ico.mid{color:#8FA0AF}
+  .st-ico.ok{color:var(--ok,#1F7A4D)}
   .rg-name{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;letter-spacing:.03em;color:var(--atlas)}
   .rg-sub{font-size:12.5px;color:var(--muted)}
   .rg-del{background:none;border:none;color:var(--bad);font-size:12.5px;font-weight:600;cursor:pointer;padding:4px 8px}
@@ -801,18 +805,13 @@ function renderGroup(g, cg, verBar){
         }
         return pn ? `<span class="rg-partner">${pn}</span>` : '';
       })()}
-      <span class="rg-sub">${g.items.length} page${g.items.length>1?'s':''}${cg.runs.length > 1 ? ` &middot; ${cg.runs.length} runs` : ''}</span>
+      ${cg.runs.length > 1 ? `<span class="rg-sub">${cg.runs.length} runs</span>` : ''}
       ${(mainItem(g).r.products || []).map(p => {
         const cls = p.fired === 0 ? 'bad' : p.fired < p.expected ? 'warn' : 'ok';
         return `<span class="pstat ${cls}">${p.product}${p.expected > 1 ? ` ${p.fired}/${p.expected}` : ''} ${p.fired === 0 ? '&#10007;' : '&#10003;'}</span>`;
       }).join('')}
       ${(mainItem(g).r.states || []).map(s => `<span class="rtag">${s}</span>`).join('')}
-      ${(() => {
-        const inds = g.items.map(x => x.r.industries).find(a => a && a.length) || [];
-        if (!inds.length) { const c = g.items.map(x => x.r.category).find(Boolean); return c ? `<span class="rtag">${c}</span>` : ''; }
-        const shown = inds.slice(0, 2).map(i => `<span class="rtag" data-tip="Partner-classified industry">${i.length > 26 ? i.slice(0, 24) + '&hellip;' : i}</span>`).join('');
-        return shown + (inds.length > 2 ? `<span class="rtag" data-tip="${inds.slice(2).join(', ').replace(/"/g,'&quot;')}">+${inds.length - 2}</span>` : '');
-      })()}
+
       <span class="scanned icon-clock" title="Most recent pull: ${when}" aria-label="Scanned ${when}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
       ${dbEnabled && !g.key.startsWith('solo-') ? `<button class="rg-del icon-btn" style="color:var(--velocity)" title="Copy a read-only link to just this scan" aria-label="Share" onclick="event.stopPropagation(); shareRun('${g.key.replace(/'/g,"\\'")}', this)">${ICONS.share}</button>` : ''}
       <button class="rg-del icon-btn" style="color:var(--velocity)" title="Load this run's client, URLs, and products back into the scan form to adjust and re-run" aria-label="Edit" onclick="event.stopPropagation(); editRun('${g.key.replace(/'/g,"\\'")}')">${ICONS.edit}</button>

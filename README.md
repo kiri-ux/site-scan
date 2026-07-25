@@ -761,3 +761,10 @@ banner visibility, Consent Mode, or pre-consent fires.
   pixels track fine without those values, so it read as a problem
   where none exists. Detection remains in scan data for any future
   internal use.
+
+## v0.15.19
+- Client header slimmed: status text badges replaced with icons (red
+  alert triangle / green check circle / gray basic dash, hover for
+  meaning), page count and industry tags removed from the bar (both
+  live in Edit and the detail). Header alert now also triggers on
+  state-check failures, matching the run dots.
