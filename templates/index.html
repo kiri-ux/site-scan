@@ -916,12 +916,36 @@ function dedupeUrls(main, convLines){
   });
   return out;
 }
+function baseDomain(u){
+  try {
+    const h = new URL(/^https?:\/\//i.test(u) ? u : 'https://' + u)
+      .hostname.toLowerCase().replace(/^www\./, '');
+    const p = h.split('.');
+    return p.length > 2 ? p.slice(-2).join('.') : h;
+  } catch(e){ return ''; }
+}
+
+// A pasted URL from another client is easy to miss once it's a pill.
+// Compare every URL against the main site's domain and confirm before
+// burning a scan on the wrong client's pages.
+function offDomainWarning(main, urls){
+  const base = baseDomain(main);
+  if (!base) return true;
+  const odd = urls.filter(u => baseDomain(u) && baseDomain(u) !== base);
+  if (!odd.length) return true;
+  return confirm(
+    `${odd.length} URL${odd.length > 1 ? 's are' : ' is'} on a different domain than ${base}:\n\n` +
+    odd.map(u => '  \u2022 ' + u).join('\n') +
+    `\n\nThis usually means a URL was pasted from another client. Scan anyway?`);
+}
+
 async function run(){
   if ($('conv-input').value.trim()){ addConvUrls($('conv-input').value); $('conv-input').value = ''; }
   const main = $('site-url').value.trim();
   convUrls = sanitizeConvList(convUrls); renderConvPills();
   const urls = dedupeUrls(main, convUrls);
   if (!urls.length) return;
+  if (!offDomainWarning(main, urls)) return;
   const full = true; // always full - basic remains a server-side fallback
   const runId = newRunId();
   const clientName = $('client-name').value.trim();
