@@ -84,7 +84,7 @@ function cmBlock(r){
     note = `<div class="cm-note warn">&#9888; No Consent Mode defaults detected in the GTM/gtag setup - Google tags likely run at full capability before consent even though a CMP is present. The GTM consent procedure installs denied-by-default settings.</div>`;
   }
   if (!stamp && !note) return '';
-  return `<div style="display:flex;gap:14px;align-items:center;margin-bottom:6px">${stamp}${(r.gtm && (r.gtm.container_ids||[]).length) ? `<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ')}</b></span>` : ''}</div>${note}`;
+  return `<div style="display:flex;gap:14px;align-items:center;margin:14px 0 6px">${stamp}${(r.gtm && (r.gtm.container_ids||[]).length) ? `<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ')}</b></span>` : ''}</div>${note}`;
 }
 
 function ownerBadge(owner){

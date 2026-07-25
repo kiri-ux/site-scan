@@ -782,3 +782,6 @@ banner visibility, Consent Mode, or pre-consent fires.
 - The per-page "Likely hardcoded pixels" fix note retired: the gating
   action item with detected sources and the attached procedure now
   carries that content authoritatively.
+
+## v0.15.22
+- Breathing room above the Consent Mode stamp row in the summary.
