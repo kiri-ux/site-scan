@@ -238,6 +238,9 @@
   .rf.total:hover{color:var(--muted)}
   .rf-sep{width:1px;height:20px;background:var(--line);margin:0 3px}
   .rf-clear{border:none;background:none;color:var(--velocity);font:500 12.5px 'Barlow',sans-serif;cursor:pointer;text-decoration:underline;padding:5px 4px}
+  .rf-sel{border:1px solid var(--line);background:#fff;border-radius:16px;padding:5px 10px;font:500 12.5px 'Barlow',sans-serif;color:var(--muted);cursor:pointer;max-width:220px}
+  .rf-sel:hover{border-color:var(--velocity)}
+  .rf-sel.on{border-color:var(--velocity);background:#EAF3FB;color:var(--atlas);font-weight:600}
   @media (max-width:640px){ .link{min-width:46%} header{flex-wrap:wrap} }
   #tipbox{position:fixed;z-index:9999;max-width:340px;background:var(--atlas);color:#F4F8FB;border-radius:8px;padding:10px 13px;font:13px/1.5 'Barlow',sans-serif;box-shadow:0 6px 24px rgba(0,45,88,.35);pointer-events:none;opacity:0;transition:opacity .12s;border-top:3px solid var(--gold)}
   #tipbox.on{opacity:1}
@@ -929,6 +932,11 @@ function setFilter(kind, i){
   if (kind === 'state') filterState = filterState === FILTER_STATES[i] ? null : FILTER_STATES[i];
   render();
 }
+function setSelectFilter(kind, v){
+  const val = v === '' ? null : (kind === 'partner' ? FILTER_PARTNERS[v] : FILTER_STATES[v]);
+  if (kind === 'partner') filterPartner = val; else filterState = val;
+  render();
+}
 function clearFilters(){ filterSev = filterPartner = filterState = null; render(); }
 
 function renderFilters(all){
@@ -940,14 +948,16 @@ function renderFilters(all){
   FILTER_STATES = [...new Set(all.flatMap(clientStates))].sort();
   let h = `<span class="rf total"><b>${all.length}</b> client${all.length > 1 ? 's' : ''}</span>`;
   counts.forEach((n, i) => { if (n) h += `<button class="rf ${SEV_CLS[i]}${filterSev === i ? ' on' : ''}" onclick="setFilter('sev',${i})"><b>${n}</b> ${SEV_LABEL[i]}</button>`; });
-  if (FILTER_PARTNERS.length > 1){
-    h += `<span class="rf-sep"></span>`;
-    FILTER_PARTNERS.forEach((p, i) => h += `<button class="rf${filterPartner === p ? ' on' : ''}" onclick="setFilter('partner',${i})">${p}</button>`);
-  }
-  if (FILTER_STATES.length > 1){
-    h += `<span class="rf-sep"></span>`;
-    FILTER_STATES.forEach((s, i) => h += `<button class="rf${filterState === s ? ' on' : ''}" onclick="setFilter('state',${i})">${s}</button>`);
-  }
+  // Partner and state are dropdowns, not chips - with a dozen partners
+  // and twenty states the chip rows wrap and drown the counts.
+  const sel = (kind, list, cur, allLabel) => {
+    const opts = [`<option value="">${allLabel}</option>`].concat(
+      list.map((v, i) => `<option value="${i}"${cur === v ? ' selected' : ''}>${v}</option>`)).join('');
+    return `<select class="rf-sel${cur ? ' on' : ''}" onchange="setSelectFilter('${kind}', this.value)">${opts}</select>`;
+  };
+  if (FILTER_PARTNERS.length > 1 || FILTER_STATES.length > 1) h += `<span class="rf-sep"></span>`;
+  if (FILTER_PARTNERS.length > 1) h += sel('partner', FILTER_PARTNERS, filterPartner, 'All partners');
+  if (FILTER_STATES.length > 1) h += sel('state', FILTER_STATES, filterState, 'All states');
   if (filterSev !== null || filterPartner || filterState)
     h += `<button class="rf-clear" onclick="clearFilters()">Clear filters</button>`;
   box.innerHTML = h;
