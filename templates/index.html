@@ -466,6 +466,26 @@
   </ul></div>
 </div>
 
+<h2>Product opportunity &mdash; consent-impact forecasting</h2>
+<p style="font-size:13.5px;margin-bottom:12px">The question advertisers ask before installing a CMP is &ldquo;what does this cost me?&rdquo; &mdash; in addressable audience, in conversion attribution, in reported ROAS. Every answer on the market today is a vendor estimate. With a panel of sites scanned before and after a banner goes in, Vici could answer it from measurement rather than assertion. That is a dataset that can only be accumulated, not bought, and it is the bridge between the scanner and the existing forecasting work.</p>
+
+<div class="cols2">
+  <div><h2>Why this is ours to build</h2><ul>
+    <li><b>We know what was supposed to fire</b> &mdash; every other scanner reports the trackers it finds. Only the agency that sold the campaign knows the expected set, which is what turns a fire rate into a measurable delta.</li>
+    <li><b>Before/after pairs come free</b> &mdash; recurring scans already capture the same site either side of a CMP install. No extra instrumentation.</li>
+    <li><b>Forecasting infrastructure already exists</b> &mdash; the waterfall and audience models are built; this supplies them with observed consent rates instead of assumed ones.</li>
+    <li><b>Answers a live objection</b> &mdash; the most common reason a client refuses a banner is fear of losing measurement. A measured number closes that conversation either way.</li>
+  </ul></div>
+  <div><h2>What it needs, and what could go wrong</h2><ul>
+    <li><b>Scan continuity</b> &mdash; the same pages, on a schedule, spanning the install date. Gaps make a pair unusable.</li>
+    <li><b>A defined metric</b> &mdash; likely post-consent fire rate per product, plus pre/post pixel counts. Decide before collecting, not after.</li>
+    <li><b>Enough sites per vertical</b> &mdash; consent rates vary widely by industry and banner design; a single blended number would be misleading.</li>
+    <li><b>Selection bias</b> &mdash; sites that install a CMP are not a random sample. Any published figure needs that stated plainly.</li>
+    <li><b>Banner design is a confound</b> &mdash; accept/reject placement moves consent rates more than anything else measured here. Record the CMP and banner type alongside the numbers or the comparison is meaningless.</li>
+    <li><b>Open:</b> is this a client-facing forecast, a sales asset, or a published benchmark? The rigour needed differs a lot between the three.</li>
+  </ul></div>
+</div>
+
 <h2>Already handled in the scanner</h2>
 <ul>
   <li>Challenge screens are detected by URL and page title (SiteGround, Cloudflare) and waited out in the same browser session before the scan gives up.</li>
