@@ -21,7 +21,10 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.15.52"
+CHALLENGE_RETRIES = 3      # passes through a JS bot challenge
+CHALLENGE_WAIT_MS = 8000   # SiteGround's screen clears in ~5s
+
+SCANNER_REV = "0.15.53"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -265,6 +268,29 @@ def _pixel_source(vendor, req_url, low_html):
     return "runtime"
 
 
+CHALLENGE_URL_HINTS = ("/.well-known/sgcaptcha/", "/cdn-cgi/challenge",
+                       "__cf_chl", "/challenge-platform/")
+CHALLENGE_TITLE_HINTS = ("robot challenge", "just a moment",
+                         "checking your browser", "attention required",
+                         "one moment, please", "verifying you are human")
+
+
+def _looks_challenged(page):
+    """Bot-protection interstitial (SiteGround sgcaptcha, Cloudflare, etc).
+    These answer 200/202 with a real-sized document, so status alone
+    never catches them."""
+    try:
+        url = (page.url or "").lower()
+    except Exception:
+        url = ""
+    try:
+        title = (page.title() or "").lower()
+    except Exception:
+        title = ""
+    return (any(h in url for h in CHALLENGE_URL_HINTS)
+            or any(h in title for h in CHALLENGE_TITLE_HINTS))
+
+
 def _container_corpora(container_ids, limit=3):
     """Published gtm.js for each container, keyed by container ID.
 
@@ -374,19 +400,37 @@ def _full_scan_impl(browser, url, products=None, states=None,
         try:
             _nav_resp = page.goto(url, wait_until="domcontentloaded",
                       timeout=PAGE_TIMEOUT_MS)
-            # An error page returns normally, so goto() not raising is
-            # not proof the real site loaded. Retry once before
-            # believing an empty result.
+            # An error page or a bot challenge returns normally, so
+            # goto() not raising is no proof the real site loaded.
             _status = getattr(_nav_resp, "status", None)
-            if _status and _status >= 400:
-                page.wait_for_timeout(3000)
+            for _attempt in range(CHALLENGE_RETRIES):
+                _bad = bool(_status and _status >= 400)
+                _chal = _looks_challenged(page)
+                if not (_bad or _chal):
+                    break
+                if _chal:
+                    result["challenged"] = True
+                    # SiteGround/Cloudflare JS challenges set a cookie and
+                    # bounce back on their own. Staying in the same context
+                    # keeps that cookie, so waiting it out is what a real
+                    # visitor does - no need to defeat anything.
+                    try:
+                        page.wait_for_url(
+                            lambda u: not any(h in (u or "").lower()
+                                              for h in CHALLENGE_URL_HINTS),
+                            timeout=CHALLENGE_WAIT_MS)
+                    except Exception:
+                        page.wait_for_timeout(CHALLENGE_WAIT_MS)
+                else:
+                    page.wait_for_timeout(3000)
                 try:
                     _nav_resp = page.goto(url, wait_until="domcontentloaded",
                                           timeout=PAGE_TIMEOUT_MS)
                     _status = getattr(_nav_resp, "status", None)
                 except Exception:
-                    pass
+                    break
             result["http_status"] = _status
+            result["challenged"] = _looks_challenged(page)
             try:
                 page.wait_for_load_state("networkidle",
                                          timeout=NETIDLE_PRE_MS)
@@ -1109,6 +1153,9 @@ def _inconclusive_reason(r):
     false 'install or repair the pixel' work, so say so instead."""
     if r.get("mode") != "full":
         return None
+    if r.get("challenged"):
+        return ("The site's bot protection served a challenge screen "
+                "instead of the page, so nothing on it could be checked.")
     status = r.get("http_status")
     if status and status >= 400:
         return f"The page returned HTTP {status}."
