@@ -316,13 +316,12 @@ function maskMap(r){
   const m = {};
   if (!SHARE_MASK()) return m;
   for (const p of (r.products || [])){
+    // Only bundled products hide DSP names. A single-pixel product is
+    // the client's own platform (Meta Pixel, TikTok Pixel) - masking
+    // that would be confusing, not discreet.
+    if ((p.pixels || []).length < 2) continue;
     let n = 0;
-    for (const px of (p.pixels || [])){
-      const s = (px.name || '').toLowerCase();
-      m[px.name] = s.includes('conversion') ? `${p.product} conversion tag`
-                 : s.includes('segment') ? `${p.product} audience tag`
-                 : `${p.product} partner tag ${++n}`;
-    }
+    for (const px of (p.pixels || [])) m[px.name] = `${p.product} DSP tag ${++n}`;
   }
   return m;
 }
@@ -480,6 +479,17 @@ function renderSite(r, i, site){
                        : p.fired < p.expected ? `<span class="badge warn"${tipAttr('partial')}>partial</span>`
                        : `<span class="badge ok"${tipAttr('firing')}>firing</span>`;
       const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected}</span>` : '';
+      // Share links collapse a multi-pixel product to one bundle row -
+      // clients get the count and the status, not the DSP roster.
+      if (SHARE_MASK() && (p.pixels || []).length > 1){
+        const sev = ['violation','warn','ungated','info'].find(s => p.pixels.some(x => x.severity === s));
+        const bundle = {name: 'DSP bundle', severity: sev,
+          fired_pre: p.pixels.some(x => x.fired_pre),
+          fired_post: p.pixels.some(x => x.fired_post),
+          configured: p.pixels.every(x => x.configured === false) ? false : undefined};
+        return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
+       <ul><li>${pxBadge(bundle)}<div><b>DSP bundle</b> <span class="pill">${p.fired}/${p.expected}</span></div></li></ul></div>`;
+      }
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
         `<li>${pxBadge(px)}<div><b>${mask[px.name] || px.name}</b>${srcTag(px.src, px.containers)}${(() => {
