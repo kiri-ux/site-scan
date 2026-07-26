@@ -294,6 +294,13 @@ function actionItemsHtml(rs, impl){
     `<li>${ownerBadge(it.owner)}<div>${it.text}</div></li>`).join('') + `</ul>`;
 }
 
+// Site-level checks live on whichever page was scanned with them. On
+// older runs that can differ from the display main, so find them
+// rather than assuming.
+function siteCheckResult(rs, fallback){
+  return (rs || []).find(r => (r.state_checks || []).length) || fallback;
+}
+
 function stateChecksHtml(r){
   if (!(r.state_checks || []).length) return '';
   // combine rows where the same check+status+detail applies to several

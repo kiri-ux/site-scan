@@ -856,7 +856,7 @@ function renderGroup(g, cg, verBar){
     </div>
     <div class="rg-body">
       ${verBar}
-      <div class="rg-summary">${chainFor(mainItem(g).r, {states: false})}<div class="detail">${cmBlock(mainItem(g).r)}${cmpEvidenceHtml(mainItem(g).r)}${stateChecksHtml(mainItem(g).r)}${(() => {
+      <div class="rg-summary">${chainFor(mainItem(g).r, {states: false})}<div class="detail">${cmBlock(mainItem(g).r)}${cmpEvidenceHtml(mainItem(g).r)}${stateChecksHtml(siteCheckResult(g.items.map(x => x.r), mainItem(g).r))}${(() => {
         let impl = g.items.map(x => x.r.implementation).find(Boolean);
         if (!impl) { const mu = normUrl(mainItem(g).r.url); const s = (schedSites || []).find(x => normUrl(x.url) === mu); impl = s && s.implementation || ''; }
         return actionItemsHtml(g.items.map(x => x.r), impl);
@@ -979,6 +979,11 @@ async function run(){
   const urls = dedupeUrls(main, convUrls);
   if (!urls.length) return;
   if (!offDomainWarning(main, urls)) return;
+  // Site-level checks run on one page. That has to be the same page the
+  // report shows as the client's main site (shortest normalized URL),
+  // or the checks land on a page nobody looks at.
+  const siteCheckIdx = urls.reduce((b, u, i) =>
+    normUrl(u).length < normUrl(urls[b]).length ? i : b, 0);
   const full = true; // always full - basic remains a server-side fallback
   const runId = newRunId();
   const clientName = $('client-name').value.trim();
@@ -1011,7 +1016,7 @@ async function run(){
         const resp = await fetch('/scan', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === 0, run_id: runId, client_name: clientName, partner_name: partnerName, industries: selectedIndustries, implementation: $('impl-select').value}),
+          body: JSON.stringify({url: urls[i], full, products: selectedProducts, states: selectedStates, site_checks: i === siteCheckIdx, run_id: runId, client_name: clientName, partner_name: partnerName, industries: selectedIndustries, implementation: $('impl-select').value}),
           signal: ctrl.signal,
         });
         clearTimeout(timer);
