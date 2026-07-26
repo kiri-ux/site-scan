@@ -289,6 +289,7 @@
   <button class="tab on" id="tab-scan" onclick="showTab('scan')">Scan</button>
   <button class="tab" id="tab-recurring" onclick="showTab('recurring')">Recurring scans</button>
   <button class="tab gold" id="tab-market" onclick="showTab('market')">Build vs market</button>
+  <button class="tab" id="tab-rollout" onclick="showTab('rollout')">Rollout notes</button>
   <button class="tab" id="laws-toggle" onclick="toggleLaws()" style="margin-left:auto">US tracking laws &#9662;</button>
 </nav>
 
@@ -429,6 +430,34 @@
 </ul>
 </details>
 <div class="footn">Internal draft &mdash; not legal or financial advice. Competitor pricing from public sources, July 2026. Capability ratings reflect Vici's use case, not a general product review. Scanner reports use check-based language and never assert legal compliance.</div>
+</div>
+
+
+<div id="view-rollout" class="mkt" style="display:none">
+<h2>Bot protection &mdash; what has to be in place before we sell this</h2>
+<p style="font-size:13.5px;margin-bottom:12px">Some hosts challenge the scanner instead of serving the page. Confirmed on <b>gravensteinapplefair.com</b> (SiteGround): the scan is redirected to a &ldquo;Robot Challenge Screen&rdquo; at <code>/.well-known/sgcaptcha/</code> and never reaches the site. The scan is correctly marked inconclusive and produces no findings &mdash; but it also produces no data, and that is not a state we can ship to a paying client.</p>
+
+<div class="cols2">
+  <div><h2>Three prerequisites</h2><ol>
+    <li><b>A stable, documented egress IP</b> &mdash; nobody can allowlist a rotating pool. Render offers static outbound IPs; this has to land first or the other two are moot.</li>
+    <li><b>An identifiable user-agent</b> &mdash; something like <code>ViciConsentScanner/1.0 (+https://vici&hellip;/scanner)</code>. Today the scanner presents as an anonymous desktop Chrome, which is exactly what bot protection exists to stop. Self-identifying makes allowlisting a simple request rather than an argument, and it matches the product's own pitch: we scan with the client's authorization.</li>
+    <li><b>Allowlisting as an onboarding step</b> &mdash; the scanner already flags a challenged scan unambiguously, so this becomes &ldquo;before we can monitor this site, your host needs to allow our scanner,&rdquo; pointing at a published page with the IP and user-agent.</li>
+  </ol></div>
+  <div><h2>Scope and open questions</h2><ul>
+    <li><b>A minority of clients, not most</b> &mdash; the rest of the roster scans fine. Expect it on SiteGround, Cloudflare with Bot Fight Mode, Wordfence and Sucuri. On a WordPress-heavy book that is a meaningful minority.</li>
+    <li><b>Likely host-level, not our address</b> &mdash; the challenged IP changed between runs (74.220.48.56, then .172), which points at a rule against the hosting range or automation fingerprinting rather than one flagged address. If so, waiting it out will not help.</li>
+    <li><b>Retrying makes it worse</b> &mdash; every challenge hit re-arms the host's timer. The scanner now retries twice at 20s and stops.</li>
+    <li><b>Don't disguise the scanner</b> &mdash; fingerprint evasion breaks on every vendor update, and it is the wrong posture for a product sold to the people running these protections.</li>
+    <li><b>Open:</b> who owns the allowlist conversation &mdash; the partner or Vici ops? And does a client who refuses simply fall outside the monitored tier?</li>
+  </ul></div>
+</div>
+
+<h2>Already handled in the scanner</h2>
+<ul>
+  <li>Challenge screens are detected by URL and page title (SiteGround, Cloudflare) and waited out in the same browser session before the scan gives up.</li>
+  <li>A scan that finds nothing at all is marked <b>inconclusive</b> rather than reported as absence, so a blocked run never generates false &ldquo;install or repair the pixel&rdquo; work.</li>
+  <li>Inconclusive scans report what was actually received &mdash; HTTP status, page title, HTML size and any redirect &mdash; so the cause is visible without a code read.</li>
+</ul>
 </div>
 
 <div id="view-recurring" style="display:none">
@@ -627,12 +656,10 @@ function buildLawsPanel(){
 }
 
 function showTab(which){
-  $('view-scan').style.display = which === 'scan' ? 'block' : 'none';
-  $('view-recurring').style.display = which === 'recurring' ? 'block' : 'none';
-  $('view-market').style.display = which === 'market' ? 'block' : 'none';
-  $('tab-scan').classList.toggle('on', which === 'scan');
-  $('tab-recurring').classList.toggle('on', which === 'recurring');
-  $('tab-market').classList.toggle('on', which === 'market');
+  for (const v of ['scan','recurring','market','rollout']){
+    $('view-' + v).style.display = which === v ? 'block' : 'none';
+    $('tab-' + v).classList.toggle('on', which === v);
+  }
 }
 
 let schedSites = [];
