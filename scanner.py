@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.15.38"
+SCANNER_REV = "0.15.50"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -374,6 +374,19 @@ def _full_scan_impl(browser, url, products=None, states=None,
         try:
             _nav_resp = page.goto(url, wait_until="domcontentloaded",
                       timeout=PAGE_TIMEOUT_MS)
+            # An error page returns normally, so goto() not raising is
+            # not proof the real site loaded. Retry once before
+            # believing an empty result.
+            _status = getattr(_nav_resp, "status", None)
+            if _status and _status >= 400:
+                page.wait_for_timeout(3000)
+                try:
+                    _nav_resp = page.goto(url, wait_until="domcontentloaded",
+                                          timeout=PAGE_TIMEOUT_MS)
+                    _status = getattr(_nav_resp, "status", None)
+                except Exception:
+                    pass
+            result["http_status"] = _status
             try:
                 page.wait_for_load_state("networkidle",
                                          timeout=NETIDLE_PRE_MS)
@@ -390,7 +403,9 @@ def _full_scan_impl(browser, url, products=None, states=None,
             return result
 
         result["ok"] = True
+        result["final_url"] = page.url
         html = page.content()
+        result["html_len"] = len(html or "")
         try:  # raw server HTML (pre-JS) - live DOM would show injected
               # scripts as if hardcoded
             raw_low = (_nav_resp.text() or "").lower() if _nav_resp else ""
@@ -1084,10 +1099,42 @@ def _dedupe_product_pixels(r):
     return r
 
 
+def _inconclusive_reason(r):
+    """A scan that found absolutely nothing is more likely a bad page
+    load than a site with no tags. Reporting it as absence produces
+    false 'install or repair the pixel' work, so say so instead."""
+    if r.get("mode") != "full":
+        return None
+    status = r.get("http_status")
+    if status and status >= 400:
+        return f"The page returned HTTP {status}."
+    if (r.get("html_len") or 0) < 2000:
+        return "The page returned almost no HTML."
+    found_anything = (r.get("gtm", {}).get("found")
+                      or r.get("cmps")
+                      or r.get("pre_consent") or r.get("post_consent")
+                      or r.get("consent_defaults")
+                      or r.get("privacy_policy_link")
+                      or any(p.get("fired") for p in r.get("products") or []))
+    if not found_anything:
+        return ("No tag manager, trackers, consent configuration or "
+                "privacy policy link were seen - consistent with a page "
+                "that did not fully load rather than a site with none.")
+    return None
+
+
 def _apply_verdict(r):
     _dedupe_product_pixels(r)
     if not r["ok"]:
         r["verdict"], r["verdict_detail"] = "error", r["error"]
+        return r
+
+    reason = _inconclusive_reason(r)
+    if reason:
+        r["inconclusive"] = True
+        r["verdict"] = "error"
+        r["verdict_detail"] = ("Scan inconclusive - " + reason
+                               + " Re-scan before acting on this result.")
         return r
 
     violations = [h for h in r["pre_consent"] if h["severity"] == "violation"]

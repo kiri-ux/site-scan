@@ -131,6 +131,7 @@
 <script src="/static/render.js"></script>
 <script>
 const RUN_ID = {{ run_id | tojson }};
+const SHARE_MODE = true;  // masks Vici product DSP names for clients
 let RUNS = [], SELECTED = null;
 
 function tsOf(r){ return r.scanned_at_iso || r.scanned_at || ''; }

@@ -88,7 +88,7 @@ function cmBlock(r){
     note = granted.length
       ? `<div class="cm-note warn">&#9888; <b>${granted.join(', ')}</b> ${granted.length > 1 ? 'are' : 'is'} granted by default - Google tags can track before the visitor consents. The target setup starts every storage type <b>denied</b> and flips to granted on Accept (this is what the GTM consent procedure installs).</div>`
       : noPath
-      ? `<div class="cm-note warn">&#9888; <b>Every storage type starts denied and there is no consent banner to grant it.</b> Google tags - GA4, Google Ads, Floodlight - run without ad or analytics storage indefinitely: no conversion attribution, no remarketing audiences, GA4 reduced to modelled data. Non-Google pixels (Meta, TikTok, Beeswax, Yahoo, The Trade Desk) are unaffected. Fix by installing a consent banner, or by reverting the defaults until one is in place.</div>`
+      ? `<div class="cm-note warn">&#9888; <b>Every storage type starts denied and there is no consent banner to grant it.</b> Google tags - GA4, Google Ads, Floodlight - run without ad or analytics storage indefinitely: no conversion attribution, no remarketing audiences, GA4 reduced to modelled data. Non-Google pixels (Meta, TikTok, and the rest of BARCK+) are unaffected and keep firing normally. Fix by installing a consent banner, or by reverting the defaults until one is in place.</div>`
       : `<div class="cm-note ok">&#10003; Correct setup: every storage type starts <b>denied</b>, so Google tags run cookieless until the visitor accepts - exactly the Consent Mode configuration the GTM consent procedure installs. No consent work needed here.</div>`;
   } else if (r.gtm && r.gtm.found && (r.cmps||[]).length) {
     stamp = `<span class="cm-stamp bad">&#10007; NOT CONFIGURED</span>`;
@@ -112,6 +112,11 @@ function ownerBadge(owner){
 
 function actionItemsHtml(rs, impl){
   if (!rs || !rs.length) return '';
+  // A page that didn't load produces false work ("install or repair
+  // the pixel") - say the scan is unreliable instead.
+  const bad = rs.filter(r => r.inconclusive);
+  if (bad.length === rs.length)
+    return `<h3>Action items</h3><div class="cm-note warn">&#9888; <b>No action items - this scan is inconclusive.</b> ${bad[0].verdict_detail || 'The page did not load fully.'} Nothing here should be treated as a finding about the site.</div>`;
   const pixOwner = impl === 'Vici-owned GTM' ? 'VICI' : impl === 'Client placement' ? 'CLIENT' : 'UNSET';
   const main = rs.slice().sort((a,b) => (a.url||'').length - (b.url||'').length)[0];
   // Vici-owned items are a work queue for the buyer, not an
@@ -303,6 +308,25 @@ function stateChecksHtml(r){
   }).join('') + `</ul>`;
 }
 
+// Share links go to clients, who shouldn't see which DSPs sit behind a
+// Vici product. Masks only Vici product component pixels - the
+// client's own tags in Other pixels keep their real names.
+const SHARE_MASK = () => typeof SHARE_MODE !== 'undefined' && SHARE_MODE;
+function maskMap(r){
+  const m = {};
+  if (!SHARE_MASK()) return m;
+  for (const p of (r.products || [])){
+    let n = 0;
+    for (const px of (p.pixels || [])){
+      const s = (px.name || '').toLowerCase();
+      m[px.name] = s.includes('conversion') ? `${p.product} conversion tag`
+                 : s.includes('segment') ? `${p.product} audience tag`
+                 : `${p.product} partner tag ${++n}`;
+    }
+  }
+  return m;
+}
+
 function cmpEvidenceHtml(r){
   // Site-level: which CMP, how it was identified, and its consent
   // trigger event. Rendered once in the client summary.
@@ -403,6 +427,7 @@ function renderSite(r, i, site){
   const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
   // group hits that belong to a selected product under the product name
   // (full per-pixel detail stays in the Product pixels section)
+  const mask = maskMap(r);
   const pixToProd = {};
   for (const p of (r.products || []))
     for (const px of (p.pixels || [])) pixToProd[px.name] = p.product;
@@ -424,7 +449,7 @@ function renderSite(r, i, site){
       ? `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='violation' ? tipAttr('violation') : tipAttr('ungated')}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
         <div><b>${h.vendor}</b>${srcTag(h.srcAgg, h.contAgg)} <span class="evidence">${h.count} component pixel${h.count>1?'s':''} - per-pixel detail in Product pixels above</span></div></li>`
       : `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='ungated' ? tipAttr('ungated') : h.severity==='violation' ? tipAttr('violation') : ''}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
-        <div><b>${h.vendor}</b>${srcTag(h.src, h.containers)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+        <div><b>${mask[h.vendor] || h.vendor}</b>${srcTag(h.src, h.containers)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Other pixels</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
   const hasCmp = (r.cmps || []).length > 0;
@@ -457,7 +482,7 @@ function renderSite(r, i, site){
       const countPill = p.expected > 1 ? ` <span class="pill">${p.fired}/${p.expected}</span>` : '';
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
-        `<li>${pxBadge(px)}<div><b>${px.name}</b>${srcTag(px.src, px.containers)}${(() => {
+        `<li>${pxBadge(px)}<div><b>${mask[px.name] || px.name}</b>${srcTag(px.src, px.containers)}${(() => {
           const sev = px.fired_pre ? px.severity : null;
           if ((sev === 'warn' || sev === 'info') && px.severity_note) return ` <span class="evidence">${px.severity_note}</span>`;
           return px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}</span>` : '';
@@ -471,11 +496,11 @@ function renderSite(r, i, site){
   // always hardcoded in the page <head>. Offer the three fix paths,
   const rejFires = (r.post_reject || []).length ? `<h3>Requests after Reject</h3><ul>` + r.post_reject.map(h =>
       `<li><span class="badge ${h.severity==='violation'?'bad':'warn'}">${h.severity}</span>
-        <div><b>${h.vendor}</b>${srcTag(h.src, h.containers)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+        <div><b>${mask[h.vendor] || h.vendor}</b>${srcTag(h.src, h.containers)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.reject_tested ? `<h3>Requests after Reject</h3><p class="kv">No trackers fired after Reject - the decline path is honored.</p>` : '');
 
   const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>
-      `<li><span class="badge ok"${tipAttr('post-consent')}>post-consent</span><div><b>${h.vendor}</b><div class="u">${h.url}</div></div></li>`).join('') + `</ul>` : '';
+      `<li><span class="badge ok"${tipAttr('post-consent')}>post-consent</span><div><b>${mask[h.vendor] || h.vendor}</b><div class="u">${h.url}</div></div></li>`).join('') + `</ul>` : '';
 
   const missingProds = prods.filter(p => p.fired === 0);
   const rejV = (r.post_reject || []).some(h => h.severity === 'violation');
