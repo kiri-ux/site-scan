@@ -26,7 +26,7 @@ from bs4 import BeautifulSoup
 CHALLENGE_RETRIES = 2
 CHALLENGE_WAIT_MS = 20000
 
-SCANNER_REV = "0.15.54"
+SCANNER_REV = "0.15.58"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -40,6 +40,23 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 
 GTM_ID_RE = re.compile(r"GTM-[A-Z0-9]{4,}")
+# gtag.js is served from googletagmanager.com but is NOT a Tag Manager
+# container - a site running only GA4 or Google Ads trips a bare
+# "googletagmanager.com" check while having no container at all.
+GTM_CONTAINER_RE = re.compile(r"googletagmanager\.com/(?:gtm\.js|ns\.html)", re.I)
+GTAG_LOADER_RE = re.compile(r"googletagmanager\.com/gtag/js", re.I)
+GTAG_ID_RE = re.compile(r"\b(?:G-[A-Z0-9]{6,}|AW-\d{6,}|DC-\d{6,})\b")
+
+
+def _gtm_info(corpus):
+    """Separate a real GTM container from a bare gtag.js install."""
+    gtm_ids = sorted(set(GTM_ID_RE.findall(corpus)))
+    has_container = bool(gtm_ids) or bool(GTM_CONTAINER_RE.search(corpus))
+    gtag_ids = sorted(set(GTAG_ID_RE.findall(corpus)))
+    has_gtag = bool(gtag_ids) or bool(GTAG_LOADER_RE.search(corpus))
+    return {"found": has_container, "container_ids": gtm_ids,
+            "gtag_only": (not has_container) and has_gtag,
+            "gtag_ids": gtag_ids}
 REQUEST_TIMEOUT = 15
 PAGE_TIMEOUT_MS = 30000
 SETTLE_SECONDS = 2.0
@@ -225,9 +242,7 @@ def basic_scan(url, result=None):
             "notes": sig["notes"],
         })
 
-    gtm_ids = sorted(set(GTM_ID_RE.findall(html)))
-    result["gtm"] = {"found": bool(gtm_ids) or "googletagmanager.com" in html,
-                     "container_ids": gtm_ids}
+    result["gtm"] = _gtm_info(html)
     return result
 
 
@@ -599,11 +614,7 @@ def _full_scan_impl(browser, url, products=None, states=None,
             result["privacy_policy_link"] = "/privacy (href)"
 
         # --- GTM presence
-        gtm_ids = sorted(set(GTM_ID_RE.findall(html + "\n" + net_corpus)))
-        result["gtm"] = {
-            "found": bool(gtm_ids) or "googletagmanager.com" in net_corpus,
-            "container_ids": gtm_ids,
-        }
+        result["gtm"] = _gtm_info(html + "\n" + net_corpus)
 
         # --- Google Consent Mode default state
         try:

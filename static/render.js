@@ -1,4 +1,5 @@
 const TIPS = {
+  'gtag-only': 'The page loads gtag.js (Google Analytics / Google Ads) from googletagmanager.com, but no Tag Manager container was found. Tags here are configured in the gtag snippet or in page code, not in a container.',
   'configured-silent': 'This tag\u2019s code was found in the page source or the GTM container, but no matching request fired. That is a FIRING problem - a trigger condition, a consent block, or a script error - not a missing tag. Fixable, and worth a GTM Preview session.',
   'not found': 'No matching request fired AND no trace of this tag was found in the page source or the GTM container JS. It was most likely never installed on this page - a placement conversation, not a debugging one.',
   'not seen': 'No request matching this pixel was observed on this page, before or after consent. From outside we cannot tell not-installed from blocked - it may also fire only on specific pages or events (a thank-you page, a form submit). The GTM config audit is what settles it.',
@@ -60,8 +61,10 @@ const GTM_PROCEDURE = `<details class="ai-proc"><summary>GTM consent procedure -
 <li><b>Publish, then re-scan:</b> the report should show Defaults &#10003; CORRECT SETUP, no pre-consent fires, and reject honored - the before/after pair is the verification.</li>
 </ol></details>`;
 
-function srcTag(s, containers){
+function srcTag(s, containers, hasGtm){
   const c = (containers || []).filter(Boolean);
+  if (s === 'runtime' && !c.length && hasGtm === false)
+    return ` <span class="src-tag gtm" data-tip="Injected at runtime - no trace in the raw page source. No Tag Manager container was detected on this page, so another script is loading it.">RUNTIME</span>`;
   if (s === 'runtime' && c.length === 1) return ` <span class="src-tag gtm" data-tip="Injected at runtime, and this pixel's fingerprint appears in ${c[0]}'s published container - strong evidence that is the source. It proves the tag is configured there, not that this exact request came from it.">${c[0]}</span>`;
   if (s === 'runtime' && c.length > 1) return ` <span class="src-tag gtm" data-tip="Injected at runtime. The fingerprint appears in more than one container (${c.join(', ')}), so container code alone can't say which one fired it.">GTM &times;${c.length}</span>`;
   if (s === 'runtime') return ` <span class="src-tag gtm" data-tip="Injected at runtime - no trace in the raw page source. With a GTM on the page, this is how GTM-managed tags load. No container fingerprint matched, so the specific container is unresolved.">GTM</span>`;
@@ -428,7 +431,11 @@ function renderSite(r, i, site){
   const chain = chainFor(r, {states: false});
 
   const kvBits = [];
-  if (r.gtm && r.gtm.found) kvBits.push(`<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ') || 'present'}</b></span>`);
+  const g = r.gtm || {};
+  if (g.found)
+    kvBits.push(`<span class="kv">GTM: <b>${(g.container_ids || []).join(', ') || 'container present, ID not detected'}</b></span>`);
+  else if (g.gtag_only)
+    kvBits.push(`<span class="kv"${tipAttr('gtag-only')}>No Tag Manager container - <b>gtag.js only${(g.gtag_ids || []).length ? ` (${g.gtag_ids.join(', ')})` : ''}</b></span>`);
   // Consent Mode defaults are stated once in the client summary; the
   // page only speaks up when its own defaults differ.
   const defStr = o => Object.entries(o || {}).sort().map(([k, v]) => `${k}=${v}`).join(', ');
@@ -444,6 +451,7 @@ function renderSite(r, i, site){
   // group hits that belong to a selected product under the product name
   // (full per-pixel detail stays in the Product pixels section)
   const mask = maskMap(r);
+  const hasGtm = !!(r.gtm && r.gtm.found);
   const pixToProd = {};
   for (const p of (r.products || []))
     for (const px of (p.pixels || [])) pixToProd[px.name] = p.product;
@@ -463,9 +471,9 @@ function renderSite(r, i, site){
   const fires = grouped.length ? `<h3>Other pixels${preViol ? ` <span class="badge bad">${preViol} pre-consent</span>` : ''}</h3><ul>` + grouped.map(h =>
       h.agg
       ? `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='violation' ? tipAttr('violation') : tipAttr('ungated')}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
-        <div><b>${h.vendor}</b>${srcTag(h.srcAgg, h.contAgg)} <span class="evidence">${h.count} component pixel${h.count>1?'s':''} - per-pixel detail in Product pixels above</span></div></li>`
+        <div><b>${h.vendor}</b>${srcTag(h.srcAgg, h.contAgg, hasGtm)} <span class="evidence">${h.count} component pixel${h.count>1?'s':''} - per-pixel detail in Product pixels above</span></div></li>`
       : `<li><span class="badge ${h.severity==='violation'?'bad':h.severity==='warn'?'warn':'neutral'}"${h.severity==='ungated' ? tipAttr('ungated') : h.severity==='violation' ? tipAttr('violation') : ''}>${h.severity === 'ungated' ? 'ungated' : h.severity}</span>
-        <div><b>${mask[h.vendor] || h.vendor}</b>${srcTag(h.src, h.containers)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+        <div><b>${mask[h.vendor] || h.vendor}</b>${srcTag(h.src, h.containers, hasGtm)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.mode === 'full' && r.ok ? `<h3>Other pixels</h3><p class="kv">No known ad/analytics endpoints were contacted before consent on this page.</p>` : '');
 
   const hasCmp = (r.cmps || []).length > 0;
@@ -505,11 +513,11 @@ function renderSite(r, i, site){
           fired_post: p.pixels.some(x => x.fired_post),
           configured: p.pixels.every(x => x.configured === false) ? false : undefined};
         return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
-       <ul><li>${pxBadge(bundle)}<div><b>DSP bundle</b> <span class="pill">${p.fired}/${p.expected}</span></div></li></ul></div>`;
+       <ul><li>${pxBadge(bundle)}<div><b>DSP bundle</b></div></li></ul></div>`;
       }
       return `<div class="prodflat"><div class="prodhead"><b>${p.product}</b>${countPill} ${stateBadge}</div>
        <ul>` + p.pixels.map(px =>
-        `<li>${pxBadge(px)}<div><b>${mask[px.name] || px.name}</b>${srcTag(px.src, px.containers)}${(() => {
+        `<li>${pxBadge(px)}<div><b>${mask[px.name] || px.name}</b>${srcTag(px.src, px.containers, hasGtm)}${(() => {
           const sev = px.fired_pre ? px.severity : null;
           if ((sev === 'warn' || sev === 'info') && px.severity_note) return ` <span class="evidence">${px.severity_note}</span>`;
           return px.fired_pre && !px.fired_post ? ` <span class="evidence">${hasCmp ? 'working, but should be consent-gated' : 'working - would need consent-gating if a banner is added'}</span>` : '';
@@ -523,7 +531,7 @@ function renderSite(r, i, site){
   // always hardcoded in the page <head>. Offer the three fix paths,
   const rejFires = (r.post_reject || []).length ? `<h3>Requests after Reject</h3><ul>` + r.post_reject.map(h =>
       `<li><span class="badge ${h.severity==='violation'?'bad':'warn'}">${h.severity}</span>
-        <div><b>${mask[h.vendor] || h.vendor}</b>${srcTag(h.src, h.containers)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
+        <div><b>${mask[h.vendor] || h.vendor}</b>${srcTag(h.src, h.containers, hasGtm)} <span class="evidence">${h.note}</span><div class="u">${h.url}</div></div></li>`).join('') + `</ul>`
     : (r.reject_tested ? `<h3>Requests after Reject</h3><p class="kv">No trackers fired after Reject - the decline path is honored.</p>` : '');
 
   const gated = (r.post_consent || []).length ? `<h3>Fired after accept (gated correctly)</h3><ul>` + r.post_consent.map(h =>
