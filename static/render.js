@@ -115,8 +115,18 @@ function actionItemsHtml(rs, impl){
   // A page that didn't load produces false work ("install or repair
   // the pixel") - say the scan is unreliable instead.
   const bad = rs.filter(r => r.inconclusive);
-  if (bad.length === rs.length)
-    return `<h3>Action items</h3><div class="cm-note warn">&#9888; <b>No action items - this scan is inconclusive.</b> ${bad[0].verdict_detail || 'The page did not load fully.'} Nothing here should be treated as a finding about the site.</div>`;
+  if (bad.length === rs.length){
+    const b = bad[0];
+    // show what the page actually returned, so the next run diagnoses
+    // itself instead of needing a code read
+    const ev = [
+      b.http_status ? `HTTP ${b.http_status}` : null,
+      b.page_title ? `page title "${b.page_title}"` : null,
+      b.html_len ? `${Math.round(b.html_len / 1024)} KB of HTML` : null,
+      (b.final_url && b.final_url !== b.url) ? `redirected to ${b.final_url}` : null
+    ].filter(Boolean);
+    return `<h3>Action items</h3><div class="cm-note warn">&#9888; <b>No action items - this scan is inconclusive.</b> ${b.verdict_detail || 'The page did not load fully.'} Nothing here should be treated as a finding about the site.${ev.length ? `<div class="evidence" style="margin-top:6px">What the scanner received: ${ev.join(' &middot; ')}.</div>` : ''}</div>`;
+  }
   const pixOwner = impl === 'Vici-owned GTM' ? 'VICI' : impl === 'Client placement' ? 'CLIENT' : 'UNSET';
   const main = rs.slice().sort((a,b) => (a.url||'').length - (b.url||'').length)[0];
   // Vici-owned items are a work queue for the buyer, not an

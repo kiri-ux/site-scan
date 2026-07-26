@@ -21,7 +21,7 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-SCANNER_REV = "0.15.50"
+SCANNER_REV = "0.15.52"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -404,6 +404,10 @@ def _full_scan_impl(browser, url, products=None, states=None,
 
         result["ok"] = True
         result["final_url"] = page.url
+        try:  # a challenge page names itself in the title
+            result["page_title"] = (page.title() or "")[:200]
+        except Exception:
+            result["page_title"] = ""
         html = page.content()
         result["html_len"] = len(html or "")
         try:  # raw server HTML (pre-JS) - live DOM would show injected
