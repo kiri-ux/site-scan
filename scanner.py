@@ -21,10 +21,12 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from bs4 import BeautifulSoup
 
-CHALLENGE_RETRIES = 3      # passes through a JS bot challenge
-CHALLENGE_WAIT_MS = 8000   # SiteGround's screen clears in ~5s
+# Every challenge hit re-arms the host's IP-reputation timer, so retry
+# sparingly: one patient attempt beats several impatient ones.
+CHALLENGE_RETRIES = 2
+CHALLENGE_WAIT_MS = 20000
 
-SCANNER_REV = "0.15.53"
+SCANNER_REV = "0.15.54"
 print(f"[scanner] rev {SCANNER_REV} loaded", flush=True)
 
 from state_checks import (STATE_CHECKS, OPTOUT_LINK_PHRASES,
@@ -391,7 +393,15 @@ def _full_scan_impl(browser, url, products=None, states=None,
             # Skip downloading heavy assets for speed. Scripts, XHR, and
             # stylesheets still load (CMPs and tags need them); aborted
             # requests are already captured by the request listener above.
-            if route.request.resource_type in ("image", "media", "font"):
+            # Exception: on a bot-challenge URL nothing is skipped - the
+            # screen may need its own assets to complete.
+            try:
+                on_challenge = any(h in (page.url or "").lower()
+                                   for h in CHALLENGE_URL_HINTS)
+            except Exception:
+                on_challenge = False
+            if (not on_challenge
+                    and route.request.resource_type in ("image", "media", "font")):
                 route.abort()
             else:
                 route.continue_()
