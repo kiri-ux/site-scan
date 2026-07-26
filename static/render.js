@@ -97,14 +97,24 @@ function cmBlock(r){
     stamp = `<span class="cm-stamp bad">&#10007; NOT CONFIGURED</span>`;
     note = `<div class="cm-note warn">&#9888; No Consent Mode defaults detected in the GTM/gtag setup - Google tags likely run at full capability before consent even though a CMP is present. The GTM consent procedure installs denied-by-default settings.</div>`;
   }
-  if (!stamp && !note) return '';
   // Ownership is a client-level fact, so it rides the summary GTM line
-  // rather than repeating on every page below.
+  // rather than repeating on every page below. The container and owner
+  // are reported whether or not there is Consent Mode data - they are
+  // independent facts and used to disappear together with it.
   const own = r.implementation === 'Vici-owned GTM'
     ? ` <span class="ob ob-vici">VICI OWNED</span>`
     : r.implementation === 'Client placement'
     ? ` <span class="ob ob-ext">CLIENT OWNED</span>` : '';
-  return `<div style="display:flex;gap:14px;align-items:center;margin:14px 0 6px">${stamp}${(r.gtm && (r.gtm.container_ids||[]).length) ? `<span class="kv">GTM: <b>${r.gtm.container_ids.join(', ')}</b>${own}</span>` : ''}</div>${note}`;
+  const g = r.gtm || {};
+  const gtmBit = (g.container_ids || []).length
+    ? `<span class="kv">GTM: <b>${g.container_ids.join(', ')}</b>${own}</span>`
+    : g.found
+    ? `<span class="kv">GTM: <b>container present, ID not detected</b>${own}</span>`
+    : g.gtag_only
+    ? `<span class="kv"${tipAttr('gtag-only')}>No Tag Manager container - <b>gtag.js only${(g.gtag_ids || []).length ? ` (${g.gtag_ids.join(', ')})` : ''}</b>${own}</span>`
+    : '';
+  if (!stamp && !note && !gtmBit) return '';
+  return `<div style="display:flex;gap:14px;align-items:center;margin:14px 0 6px">${stamp}${gtmBit}</div>${note}`;
 }
 
 function ownerBadge(owner){
