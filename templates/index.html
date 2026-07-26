@@ -439,7 +439,7 @@
 
 <div class="cols2">
   <div><h2>Three prerequisites</h2><ol>
-    <li><b>A stable, documented egress IP</b> &mdash; nobody can allowlist a rotating pool. Render offers static outbound IPs; this has to land first or the other two are moot.</li>
+    <li><b>A stable, documented egress IP</b> &mdash; nobody can allowlist a rotating pool. Whatever infrastructure this ships on needs a fixed outbound IP, published so partners can hand it to a host. This has to land first or the other two are moot.</li>
     <li><b>An identifiable user-agent</b> &mdash; something like <code>ViciConsentScanner/1.0 (+https://vici&hellip;/scanner)</code>. Today the scanner presents as an anonymous desktop Chrome, which is exactly what bot protection exists to stop. Self-identifying makes allowlisting a simple request rather than an argument, and it matches the product's own pitch: we scan with the client's authorization.</li>
     <li><b>Allowlisting as an onboarding step</b> &mdash; the scanner already flags a challenged scan unambiguously, so this becomes &ldquo;before we can monitor this site, your host needs to allow our scanner,&rdquo; pointing at a published page with the IP and user-agent.</li>
   </ol></div>
