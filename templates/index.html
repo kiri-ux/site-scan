@@ -486,6 +486,46 @@
   </ul></div>
 </div>
 
+<h2>GTM API &mdash; state of play and the production target</h2>
+<p style="font-size:13.5px;margin-bottom:12px">A working read path exists and has been proven end to end against live containers. The prototype is a standalone script (<code>gtm_api.py</code>), not wired into the scanner. What follows is what was built, what was tried and rejected, and how it should be built for production.</p>
+
+<div class="cols2">
+  <div><h2>Proven so far</h2><ul>
+    <li><b>Cloud project</b> &mdash; dedicated project, Tag Manager API enabled. Separate from the general-purpose project on purpose: this credential can eventually publish tags to client sites, so its blast radius should be its own.</li>
+    <li><b>OAuth, not a service account</b> &mdash; see the next panel. Consent screen is <b>Internal</b>, which skips Google app verification entirely.</li>
+    <li><b>White-labeled identity</b> &mdash; logins live on a secondary domain in the same Workspace org, so nothing partner-facing carries the parent brand while the accounts stay centrally administered.</li>
+    <li><b>Multi-login merge</b> &mdash; Google caps how many GTM accounts one login can join, so several logins are authorized and their views merged into one index keyed by GTM public ID. Overlap is expected and handled: first login claims a container, the rest are recorded as fallbacks.</li>
+    <li><b>Live read confirmed</b> &mdash; 279 containers reachable from one account; a container read returned its full tag list with consent settings, firing triggers and paused state.</li>
+    <li><b>Reads the LIVE version</b>, not the default workspace &mdash; a workspace can hold unpublished edits, so it does not describe what the site actually serves, and what the site serves is what the scanner observes.</li>
+  </ul></div>
+  <div><h2>Tried and rejected: service account</h2><ul>
+    <li><b>Why it was the first choice</b> &mdash; no consent flow, no per-user token, standard for automated access.</li>
+    <li><b>Why it fails here</b> &mdash; a service account must be invited to every GTM account individually. With hundreds of partner-named accounts and new ones added regularly, that is a permanent chore with a guaranteed failure mode: the invite nobody remembers. An OAuth token inherits the access its login already has, including accounts created tomorrow.</li>
+    <li><b>Secondary cost</b> &mdash; the org blocks downloadable service account keys by default (Secure by Default). Working around that meant weakening an org policy for no lasting benefit. The override has been reverted and the service account deleted.</li>
+    <li><b>Where it still fits</b> &mdash; a client who owns their own GTM account and will grant narrow access rather than full membership.</li>
+  </ul></div>
+</div>
+
+<h2>Production target</h2>
+<div class="cols2">
+  <div><h2>Build it this way</h2><ul>
+    <li><b>Cache-first, not a nightly sweep</b> &mdash; the earlier plan was an estate-wide overnight job. Simpler and cheaper: on scan, look up the container's cached audit; if missing or stale, kick off a background read and write it to storage. Common case costs nothing, a new client self-populates, and no cron job is needed until estate-wide data is wanted for its own sake.</li>
+    <li><b>Never inline in the scan path</b> &mdash; the quota is 0.25 QPS per PROJECT (25 requests per 100 seconds), so calls queue globally no matter how many logins exist. A background write that fails must never break a scan.</li>
+    <li><b>Store keyed by GTM public ID</b> &mdash; with a fetched-at timestamp. The report should say how old an audit is rather than presenting stale configuration as current.</li>
+    <li><b>Degrade to fingerprint attribution</b> &mdash; a container nobody can see is a normal outcome, not an error. The scanner's existing per-container corpus matching stays the fallback and is the only method that works on client-owned containers.</li>
+    <li><b>Read-only scope until the write side is genuinely needed</b> &mdash; a refresh token covering hundreds of client containers is a serious credential. Keep it unable to publish for as long as possible.</li>
+    <li><b>Secrets, not config</b> &mdash; the OAuth client JSON and the refresh tokens are production secrets. They were kept off shared drives during prototyping and should stay that way.</li>
+  </ul></div>
+  <div><h2>What it unlocks, and what is still open</h2><ul>
+    <li><b>Complete tag inventory</b> &mdash; the scan only sees pixels it recognizes by endpoint. A test container returned nine custom HTML tags the scan would never have classified. This is the biggest single gain.</li>
+    <li><b>Real consent configuration</b> &mdash; whether a tag actually has consent settings, rather than inferring gating from firing behavior.</li>
+    <li><b>Definitive container attribution</b> &mdash; replaces fingerprint inference where access exists, and resolves the case fingerprinting cannot: a tag that exists but has no firing trigger.</li>
+    <li><b>Open: coverage.</b> Each GTM account needs a login added before it appears. Which accounts are Vici-controlled versus client-owned should be recorded as it is done &mdash; it drives the ownership tag on the report.</li>
+    <li><b>Open: staleness policy.</b> How old may an audit be before the report stops relying on it?</li>
+    <li><b>Open: the write path.</b> Applying the consent procedure via the API is the natural next product. It needs edit.containers, edit.containerversions and publish, and every login re-authorized. Strong recommendation: stop at a created version and let a human publish, at least until it has proven itself.</li>
+  </ul></div>
+</div>
+
 <h2>Already handled in the scanner</h2>
 <ul>
   <li>Challenge screens are detected by URL and page title (SiteGround, Cloudflare) and waited out in the same browser session before the scan gives up.</li>
