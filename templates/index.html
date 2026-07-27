@@ -486,6 +486,25 @@
   </ul></div>
 </div>
 
+<h2>Recurring scans &mdash; the value proposition after a client is fixed</h2>
+<p style="font-size:13.5px;margin-bottom:12px">A fixed static site rescanned daily returns the same green result forever, and a weekly &ldquo;all clear&rdquo; gets ignored inside a month. The value is not watching for the same problem to return &mdash; it is that the fixed state is fragile in specific, predictable ways, and every one of them is invisible until something looks. <b>The fix is a moment; the site keeps changing.</b></p>
+
+<div class="cols2">
+  <div><h2>What recurring scans actually catch</h2><ul>
+    <li><b>Measurement</b> &mdash; a pixel that stopped firing is caught in a day rather than at the end of a reporting cycle. New product pixels are confirmed live after launch. This protects the data Vici optimizes and reports on, and is the strongest argument of the four.</li>
+    <li><b>Change detection</b> &mdash; a site redesign or CMS update drops the tracking; someone adds a tag outside the container; CMP settings reset after a plugin update.</li>
+    <li><b>Compliance drift</b> &mdash; new tags appear ungated after the fix, a banner quietly stops gating, or a new state law starts applying to an existing client.</li>
+    <li><b>Proof over time</b> &mdash; a dated scan history showing the site was configured correctly, evidence if a claim ever arrives, and a before/after record of when remediation happened.</li>
+  </ul></div>
+  <div><h2>What this means for the build</h2><ul>
+    <li><b>Report only on change</b> &mdash; this is the requirement that makes recurring defensible. Silence when nothing moved, an alert when something does. The scanner currently produces a full report every run regardless, which trains people to ignore it.</li>
+    <li><b>Needs a diff, not just a history</b> &mdash; run-over-run comparison per client: pixels that stopped firing, tags that appeared, CMP or Consent Mode changes, state checks that flipped. The run pills already store the history; nothing computes the delta.</li>
+    <li><b>Cadence should follow spend, not a flat subscription</b> &mdash; weekly is enough to catch a redesign for a client with active spend; a dormant client does not need surveillance. Nothing about these sites changes hourly.</li>
+    <li><b>Scan on the event, not only the schedule</b> &mdash; after a redesign, a new product launch, or a CMP change. That is when findings actually appear, and it is a natural hook into the orders system.</li>
+    <li><b>Open:</b> what counts as a change worth alerting on, and who receives it &mdash; the buyer, the partner, or both?</li>
+  </ul></div>
+</div>
+
 <h2>GTM API &mdash; state of play and the production target</h2>
 <p style="font-size:13.5px;margin-bottom:12px">A working read path exists and has been proven end to end against live containers. The prototype is a standalone script (<code>gtm_api.py</code>), not wired into the scanner. What follows is what was built, what was tried and rejected, and how it should be built for production.</p>
 
