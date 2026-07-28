@@ -993,10 +993,17 @@ function renderGroup(g, cg, verBar){
         return pn ? `<span class="rg-partner">${pn}</span>` : '';
       })()}
       ${cg.runs.length > 1 ? `<span class="rg-sub">${cg.runs.length} runs</span>` : ''}
-      ${(mainItem(g).r.products || []).map(p => {
-        const cls = p.fired === 0 ? 'bad' : p.fired < p.expected ? 'warn' : 'ok';
-        return `<span class="pstat ${cls}">${p.product}${p.expected > 1 ? ` ${p.fired}/${p.expected}` : ''} ${p.fired === 0 ? '&#10007;' : '&#10003;'}</span>`;
-      }).join('')}
+      ${(() => {
+        // An inconclusive run has every product at 0/n because the page
+        // never loaded. Showing those as failures blames the client for
+        // a block on our side.
+        if (g.items.every(x => x.r.inconclusive))
+          return `<span class="pstat warn">scan blocked</span>`;
+        return (mainItem(g).r.products || []).map(p => {
+          const cls = p.fired === 0 ? 'bad' : p.fired < p.expected ? 'warn' : 'ok';
+          return `<span class="pstat ${cls}">${p.product}${p.expected > 1 ? ` ${p.fired}/${p.expected}` : ''} ${p.fired === 0 ? '&#10007;' : '&#10003;'}</span>`;
+        }).join('');
+      })()}
       ${(mainItem(g).r.states || []).map(s => `<span class="rtag">${s}</span>`).join('')}
 
       <span class="scanned icon-clock" title="Most recent pull: ${when}" aria-label="Scanned ${when}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>

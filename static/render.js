@@ -72,6 +72,19 @@ function srcTag(s, containers, hasGtm){
   return '';
 }
 
+// Consent Mode natively governs only Google tags. Naming the client's
+// own affected products beats a generic list - a Meta-only client gains
+// nothing from a defaults fix, and should not be told otherwise.
+const GOOGLE_PIXELS = ['Google Ads', 'Google Analytics', 'Google Analytics 4', 'Floodlight'];
+function googleProds(r){
+  return (r.products || []).filter(p => (p.pixels || [])
+    .some(px => GOOGLE_PIXELS.includes(px.name))).map(p => p.product).join(', ');
+}
+function nonGoogleProds(r){
+  return (r.products || []).filter(p => !(p.pixels || [])
+    .some(px => GOOGLE_PIXELS.includes(px.name))).map(p => p.product).join(', ');
+}
+
 function cmBlock(r){
   // Consent Mode verdict - site-level, rendered once in the client
   // summary rather than per page
@@ -82,7 +95,12 @@ function cmBlock(r){
     // Denied defaults are only "correct" when a banner can grant
     // consent. With none, nothing ever flips them and the Google tags
     // are switched off for good - the opposite of a pass.
-    const noPath = !granted.length && !(r.cmps || []).length;
+    // A notice-only bar is not a consent path: it dismisses itself and
+    // sets a cookie, it does not push a consent update. So denied
+    // defaults behind one leave the tags dark exactly as no banner would.
+    const realCmp = (r.cmps || []).filter(c => c.name !== 'Notice-only banner');
+    const noticeOnly = realCmp.length < (r.cmps || []).length;
+    const noPath = !granted.length && !realCmp.length;
     stamp = granted.length
       ? `<span class="cm-stamp bad"${tipAttr('defaults')}>&#10007; INCORRECT SETUP</span>`
       : noPath
@@ -91,7 +109,7 @@ function cmBlock(r){
     note = granted.length
       ? `<div class="cm-note warn">&#9888; <b>${granted.join(', ')}</b> ${granted.length > 1 ? 'are' : 'is'} granted by default - Google tags can track before the visitor consents. The target setup starts every storage type <b>denied</b> and flips to granted on Accept (this is what the GTM consent procedure installs).</div>`
       : noPath
-      ? `<div class="cm-note warn">&#9888; <b>Every storage type starts denied and there is no consent banner to grant it.</b> Google tags - GA4, Google Ads, Floodlight - run without ad or analytics storage indefinitely: no conversion attribution, no remarketing audiences, GA4 reduced to modelled data. Non-Google pixels (Meta, TikTok, and the rest of BARCK+) are unaffected and keep firing normally. Fix by installing a consent banner, or by reverting the defaults until one is in place.</div>`
+      ? `<div class="cm-note warn">&#9888; <b>Every storage type starts denied and ${noticeOnly ? 'the notice-only bar cannot grant it' : 'there is no consent banner to grant it'}.</b> ${noticeOnly ? 'A notice-only bar dismisses itself and sets a cookie - it does not send a consent update - so nothing ever flips these to granted. ' : ''}Google tags${googleProds(r) ? ` on this client (${googleProds(r)})` : ''} run without ad or analytics storage indefinitely: no conversion attribution, no remarketing audiences, GA4 reduced to modelled data.${nonGoogleProds(r) ? ` Non-Google pixels (${nonGoogleProds(r)}) are unaffected and keep firing normally.` : ''} Fix by installing a consent banner that sends a consent update, or by reverting the defaults until one is in place.</div>`
       : `<div class="cm-note ok">&#10003; Correct setup: every storage type starts <b>denied</b>, so Google tags run cookieless until the visitor accepts - exactly the Consent Mode configuration the GTM consent procedure installs. No consent work needed here.</div>`;
   } else if (r.gtm && r.gtm.found && (r.cmps||[]).length) {
     stamp = `<span class="cm-stamp bad">&#10007; NOT CONFIGURED</span>`;
@@ -315,6 +333,9 @@ function siteCheckResult(rs, fallback){
 }
 
 function stateChecksHtml(r){
+  // A blocked page finds no privacy policy link and contacts no
+  // trackers on the GPC pass - both look like findings and neither is.
+  if (r.inconclusive) return '';
   if (!(r.state_checks || []).length) return '';
   // combine rows where the same check+status+detail applies to several
   // states (detail differs only by the state name in "...for X
@@ -380,7 +401,11 @@ function cmpDiffHtml(r, siteNames){
 function chainFor(r, opts){
   const withStates = !(opts && opts.states === false);
   const cmpNames = r.cmps.map(c => c.name).join(', ');
-  const cmpState = r.cmps.length ? 'pass' : (r.ok ? 'fail' : 'mid');
+  // No banner is a finding where a state expects an accessible opt-out.
+  // With no state targeting set, it is a note, not a failure.
+  const cmpState = r.cmps.length ? 'pass'
+                 : !r.ok ? 'mid'
+                 : (r.states || []).length ? 'fail' : 'mid';
   const bannerState = r.banner_visible === true ? 'pass'
                     : r.banner_visible === false ? 'fail' : 'mid';
   const cmState = r.consent_mode_default === true
@@ -552,11 +577,13 @@ function renderSite(r, i, site){
   const headBadges = [
     rejV ? `<span class="badge bad"${tipAttr('fires after reject')}>fires after reject</span>` : '',
     r.verdict === 'misconfigured' && !rejV ? `<span class="badge bad"${tipAttr('pre-consent fires')}>pre-consent fires</span>` : '',
-    missingProds.length ? `<span class="badge bad"${tipAttr('pixels missing')}>pixels missing</span>` : '',
+    (missingProds.length && !r.inconclusive) ? `<span class="badge bad"${tipAttr('pixels missing')}>pixels missing</span>` : '',
     r.verdict === 'error' ? `<span class="badge warn"${tipAttr('scan error')}>scan error</span>` : '',
     r.mode !== 'full' ? `<span class="badge neutral">${r.mode}</span>` : '',
   ].join('');
-  const prodStat = prods.map(p => {
+  // Nothing loaded, so every product reads 0/n - that is the block
+  // talking, not the site. Show the reason instead.
+  const prodStat = r.inconclusive ? '' : prods.map(p => {
     const count = p.expected > 1 ? ` ${p.fired}/${p.expected}` : '';
     const cls = p.fired === 0 ? 'bad' : p.fired < p.expected ? 'warn' : 'ok';
     const mark = p.fired === 0 ? '&#10007;' : '&#10003;';
