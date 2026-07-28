@@ -332,6 +332,54 @@ function siteCheckResult(rs, fallback){
   return (rs || []).find(r => (r.state_checks || []).length) || fallback;
 }
 
+// --- container audit -------------------------------------------------
+// What the GTM container is CONFIGURED to do, as opposed to what the
+// scan observed firing. Fetched from the cache, so it is absent until a
+// background audit has run - and permanently absent for client-owned
+// containers nobody at Vici can read. Absence is normal, not an error.
+const AUDITS = {};
+
+async function loadAudits(ids, onDone){
+  const want = [...new Set((ids || []).filter(Boolean))]
+    .filter(id => !(id in AUDITS));
+  if (!want.length) return;
+  await Promise.all(want.map(async id => {
+    try {
+      const d = await (await fetch(`/gtm/audit/${encodeURIComponent(id)}`)).json();
+      AUDITS[id] = d.audit || null;
+    } catch(e){ AUDITS[id] = null; }
+  }));
+  if (onDone) onDone();
+}
+
+function containerAuditHtml(r){
+  const ids = ((r.gtm || {}).container_ids) || [];
+  const found = ids.map(id => AUDITS[id]).filter(a => a && a.status === 'ok');
+  if (!found.length) return '';
+  return found.map(a => {
+    const tags = a.tags || [];
+    const gated = tags.filter(t => t.consent_status === 'NEEDED').length;
+    const known = tags.filter(t => t.vendor);
+    const rows = known.map(t => {
+      const cls = t.consent_status === 'NEEDED' ? 'ok' : 'bad';
+      const label = t.consent_status === 'NEEDED'
+        ? `gated: ${(t.consent_types || []).join(', ') || 'consent required'}`
+        : 'not gated';
+      const notes = [];
+      if (t.paused) notes.push('paused');
+      if (!(t.firing_triggers || []).length) notes.push('no firing trigger');
+      return `<li><span class="badge ${cls}">${label}</span>
+        <div><b>${t.vendor}</b> <span class="evidence">${t.name}${t.vendor_from === 'content' ? ' &middot; identified from the tag code' : ''}${notes.length ? ' &middot; ' + notes.join(', ') : ''}</span></div></li>`;
+    }).join('');
+    // Tags with no vendor fingerprint are usually UI scripts, not
+    // trackers - counted, not listed, so they don't read as findings.
+    const other = tags.length - known.length;
+    return `<h3>Container configuration${a._age_days > 1 ? ` <span class="evidence">(read ${Math.round(a._age_days)} days ago)</span>` : ''}</h3>
+      <p class="kv">${a.public_id} &middot; <b>${tags.length}</b> tag${tags.length === 1 ? '' : 's'}, <b>${gated}</b> with consent checks configured${other ? ` &middot; ${other} with no vendor fingerprint (usually UI scripts, not trackers)` : ''}</p>
+      ${rows ? `<ul>${rows}</ul>` : ''}`;
+  }).join('');
+}
+
 function stateChecksHtml(r){
   // A blocked page finds no privacy policy link and contacts no
   // trackers on the GPC pass - both look like findings and neither is.
@@ -480,7 +528,7 @@ function renderSite(r, i, site){
   else if (!site && mineDef)
     kvBits.push(`<span class="kv"${tipAttr('defaults')}>Defaults: <b>${mineDef}</b></span>`);
 
-  const cmpDetail = cmpDiffHtml(r, site && (site.cmps || []).map(c => c.name));
+  const cmpDetail = containerAuditHtml(r) + cmpDiffHtml(r, site && (site.cmps || []).map(c => c.name));
 
   const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
   // group hits that belong to a selected product under the product name

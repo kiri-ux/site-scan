@@ -62,6 +62,14 @@ def init_db():
                 ADD COLUMN IF NOT EXISTS industries TEXT NOT NULL DEFAULT '[]';
             ALTER TABLE schedule
                 ADD COLUMN IF NOT EXISTS implementation TEXT NOT NULL DEFAULT '';
+            CREATE TABLE IF NOT EXISTS gtm_audits (
+                public_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                result JSONB NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS gtm_audits_fetched
+                ON gtm_audits (fetched_at DESC);
         """)
 
 
@@ -221,3 +229,54 @@ def upsert_site(url, frequency, products="", conversion_urls="",
 def delete_site(url):
     with _conn() as cn, cn.cursor() as cur:
         cur.execute("DELETE FROM schedule WHERE url = %s", (url,))
+
+
+# --- GTM container audits -------------------------------------------
+# Cached reads of a container's published configuration. Failures are
+# stored too: a container no Vici login can see is a client-owned GTM
+# account, and re-asking on every scan wastes a quota that is only 25
+# requests per 100 seconds.
+
+def get_audit(public_id):
+    if not enabled():
+        return None
+    with _conn() as cn, cn.cursor() as cur:
+        cur.execute("""
+            SELECT status, result,
+                   EXTRACT(EPOCH FROM (now() - fetched_at))/86400.0,
+                   to_char(fetched_at AT TIME ZONE 'UTC',
+                           'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+            FROM gtm_audits WHERE public_id = %s""", (public_id.upper(),))
+        row = cur.fetchone()
+        if not row:
+            return None
+        status, result, age_days, iso = row
+        r = result if isinstance(result, dict) else json.loads(result)
+        r["_status"] = status
+        r["_age_days"] = round(float(age_days), 2)
+        r["_fetched_at"] = iso
+        return r
+
+
+def save_audit(public_id, status, result):
+    if not enabled():
+        return
+    with _conn() as cn, cn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO gtm_audits (public_id, status, fetched_at, result)
+            VALUES (%s, %s, now(), %s)
+            ON CONFLICT (public_id) DO UPDATE
+                SET status = EXCLUDED.status,
+                    fetched_at = EXCLUDED.fetched_at,
+                    result = EXCLUDED.result
+        """, (public_id.upper(), status, json.dumps(result)))
+
+
+def audit_coverage():
+    if not enabled():
+        return {"enabled": False}
+    with _conn() as cn, cn.cursor() as cur:
+        cur.execute("SELECT status, count(*) FROM gtm_audits GROUP BY status")
+        by_status = {s: n for s, n in cur.fetchall()}
+        return {"enabled": True, "by_status": by_status,
+                "total": sum(by_status.values())}

@@ -17,6 +17,7 @@ import re
 from datetime import timedelta
 
 import db
+import gtm_api
 from scanner import scan_site, normalize_url
 
 
@@ -52,7 +53,7 @@ app.secret_key = (os.environ.get("SECRET_KEY")
                   ).hexdigest())
 app.permanent_session_lifetime = timedelta(days=30)
 
-_OPEN_PREFIXES = ("/run/", "/api/run/", "/static/")
+_OPEN_PREFIXES = ("/run/", "/api/run/", "/static/", "/gtm/audit/")
 _OPEN_PATHS = {"/health", "/favicon.ico", "/login"}
 
 
@@ -142,7 +143,39 @@ def scan():
             db.save_scan(result)
         except Exception as e:
             print(f"save_scan failed: {e}")
+        try:
+            # Queue container audits in the background. Never inline:
+            # the API quota would put a scan behind every other scan.
+            gtm_api.refresh_async(
+                (result.get("gtm") or {}).get("container_ids") or [],
+                db.get_audit, db.save_audit)
+        except Exception as e:
+            print(f"gtm refresh failed: {e}")
     return jsonify(result)
+
+
+@app.get("/gtm/audit/<public_id>")
+def gtm_audit(public_id):
+    """Cached container configuration. Returns null rather than an
+    error when there is nothing cached - no audit is the normal case
+    for a client-owned container, and the report falls back to
+    fingerprint attribution there."""
+    try:
+        return jsonify({"audit": db.get_audit(public_id)})
+    except Exception as e:
+        print(f"gtm_audit failed: {e}")
+        return jsonify({"audit": None})
+
+
+@app.get("/gtm/coverage")
+def gtm_coverage():
+    try:
+        cov = db.audit_coverage()
+        cov["api_configured"] = gtm_api.enabled()
+        return jsonify(cov)
+    except Exception as e:
+        print(f"gtm_coverage failed: {e}")
+        return jsonify({"enabled": False, "api_configured": False})
 
 
 @app.get("/history")

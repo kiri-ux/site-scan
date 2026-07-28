@@ -1113,6 +1113,8 @@ function render(){
   $('results-tools').style.display = results.length ? 'flex' : 'none';
   const all = sortedClients();
   renderFilters(all);
+  // container audits arrive from cache after the fact; re-render once
+  loadAudits(results.flatMap(r => ((r.gtm || {}).container_ids) || []), render);
   const vis = visibleClients(all);
   $('results').innerHTML = vis.map(renderClient).join('')
     || (results.length ? `<p class="empty">No clients match these filters.</p>` : '');
