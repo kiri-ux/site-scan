@@ -451,6 +451,61 @@
 
 
 <div id="view-rollout" class="mkt" style="display:none">
+<h2>How a scan works &mdash; for dev</h2>
+<p style="font-size:13.5px;margin-bottom:12px">Deterministic Python driving a real browser. No third-party APIs, no AI model in the scan path: every finding is a pattern match against a fixed endpoint list (<code>signatures.py</code>), so the same site scanned twice gives the same answer and any finding can be traced to a specific request at a specific timestamp. That reproducibility is the point &mdash; these reports go to clients on a compliance topic.</p>
+
+<div class="cols2">
+  <div><h2>Three passes per page</h2>
+  <p style="font-size:13.5px;margin-bottom:8px">Each in a fresh browser context, so no cookies or state carry over.</p>
+  <ol>
+    <li><b>Pre/post consent</b> &mdash; load cold, record every request, click Accept, record again</li>
+    <li><b>Reject</b> &mdash; reload, click Reject, record what still fires</li>
+    <li><b>GPC</b> &mdash; reload with the Global Privacy Control signal set, record what fires anyway</li>
+  </ol>
+  <h2>Calls made</h2><ul>
+    <li><code>page.goto(url)</code> &times;3 &mdash; the three passes</li>
+    <li>HTTP GET of the raw HTML &mdash; pre-JavaScript source, to tell a hardcoded tag from an injected one</li>
+    <li><code>googletagmanager.com/gtm.js?id=&hellip;</code> &mdash; published container JS, up to 3 per page, for fingerprint attribution</li>
+    <li>Everything else is passive: requests the page itself makes, observed through a listener</li>
+  </ul>
+  <h2>Stack</h2><ul>
+    <li>Playwright driving headless Chromium; Python / Flask; Postgres for scan history</li>
+    <li>Images, media and fonts aborted for speed &mdash; scripts, XHR and stylesheets always load</li>
+    <li>15&ndash;40s per page, two pages concurrently</li>
+  </ul></div>
+
+  <div><h2>Bot restrictions &mdash; not circumvented</h2><ul>
+    <li>Desktop Chrome user-agent, 1366&times;900 viewport, en-US locale</li>
+    <li>Challenge screens detected by URL and page title (SiteGround sgcaptcha, Cloudflare)</li>
+    <li>On detection: asset blocking is disabled, the scanner waits up to 20s in-session, and retries twice</li>
+    <li>Still blocked &rarr; the scan is marked <b>inconclusive</b> and produces no findings</li>
+    <li><b>No fingerprint evasion, deliberately</b> &mdash; it breaks on every vendor update and it is the wrong posture for a product sold to the people running these protections. The real fix is the three prerequisites below.</li>
+  </ul>
+  <h2>Known limits of the method</h2><ul>
+    <li><b>Load-time only</b> &mdash; a tag that fires on scroll, click or form submit is not seen</li>
+    <li><b>One geography</b> &mdash; whatever IP the scanner runs from; a site serving a different banner to EU visitors would look different from Europe</li>
+    <li><b>Accept is clicked by known selector or text fallback</b> &mdash; when the fallback misfires, the reject and post-consent results become unreliable, which is why an unrecognized banner matters</li>
+    <li><b>Only recognizes what is in the signature list</b> &mdash; an unknown vendor or a custom HTML tag is invisible. This is the gap the GTM API closes.</li>
+  </ul></div>
+</div>
+
+<h2>What the GTM API integration changes</h2>
+<div class="cols2">
+  <div><h2>Adds a fourth source, does not replace the scan</h2><ul>
+    <li><b>The scan sees what fired. The API sees what is configured.</b> Neither answers the other's question &mdash; the value is in the join. A tag can be configured and never fire; a tag can fire that nobody knew was there.</li>
+    <li><b>Complete tag inventory</b> &mdash; the scan only classifies pixels it recognizes by endpoint. A test container returned nine custom HTML tags the scan would never have identified. Biggest single gain.</li>
+    <li><b>Real consent configuration</b> &mdash; whether a tag actually carries consent settings, rather than inferring gating from firing behavior.</li>
+    <li><b>Definitive container attribution</b> &mdash; replaces the <code>gtm.js</code> fingerprint guess wherever access exists, and resolves what fingerprinting cannot: a tag that exists but has no firing trigger.</li>
+  </ul></div>
+  <div><h2>How it fits the scan path</h2><ul>
+    <li><b>Not inline.</b> The quota is 0.25 QPS per project (25 requests per 100 seconds) and applies globally regardless of how many logins exist. An API read must never sit in front of a scan or be able to fail one.</li>
+    <li><b>Cache-first</b> &mdash; on scan, look up the container's cached audit; if missing or stale, kick off a background read and store it. Common case costs nothing and a new client self-populates.</li>
+    <li><b>Reads the live published version</b>, not the default workspace: a workspace can hold unpublished edits, so it does not describe what the site actually serves.</li>
+    <li><b>Degrades to fingerprint attribution</b> &mdash; a container no Vici login can see is a normal outcome, not an error, and is the case client-owned containers will always land in.</li>
+    <li>Detail in the GTM API section further down this page.</li>
+  </ul></div>
+</div>
+
 <h2>Bot protection &mdash; what has to be in place before we sell this</h2>
 <p style="font-size:13.5px;margin-bottom:12px">Some hosts challenge the scanner instead of serving the page. Confirmed on <b>gravensteinapplefair.com</b> (SiteGround): the scan is redirected to a &ldquo;Robot Challenge Screen&rdquo; at <code>/.well-known/sgcaptcha/</code> and never reaches the site. The scan is correctly marked inconclusive and produces no findings &mdash; but it also produces no data, and that is not a state we can ship to a paying client.</p>
 
