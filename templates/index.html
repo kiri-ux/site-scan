@@ -1282,6 +1282,8 @@ async function run(){
   await Promise.all(Array.from({length: Math.min(CONCURRENCY, urls.length)}, scanWorker));
   $('bar-fill').style.width = '100%';
   $('progress-label').textContent = 'Done';
+  // audits are queued by the server as each scan saves; poll for them
+  pollAudits(results.flatMap(r => ((r.gtm || {}).container_ids) || []), render);
   $('go').disabled = false;
 }
 

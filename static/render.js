@@ -338,18 +338,40 @@ function siteCheckResult(rs, fallback){
 // background audit has run - and permanently absent for client-owned
 // containers nobody at Vici can read. Absence is normal, not an error.
 const AUDITS = {};
+const AUDIT_FETCHING = new Set();
 
+// A miss is NOT cached. The background audit takes a few seconds - the
+// quota forces 4s between calls - so the first look after a scan finds
+// nothing, and caching that would hide the result until a reload.
 async function loadAudits(ids, onDone){
   const want = [...new Set((ids || []).filter(Boolean))]
-    .filter(id => !(id in AUDITS));
+    .filter(id => !AUDITS[id] && !AUDIT_FETCHING.has(id));
   if (!want.length) return;
+  want.forEach(id => AUDIT_FETCHING.add(id));
+  let arrived = false;
   await Promise.all(want.map(async id => {
     try {
       const d = await (await fetch(`/gtm/audit/${encodeURIComponent(id)}`)).json();
-      AUDITS[id] = d.audit || null;
-    } catch(e){ AUDITS[id] = null; }
+      if (d.audit) { AUDITS[id] = d.audit; arrived = true; }
+    } catch(e){ /* not cached yet, or no DB - try again next time */ }
+    finally { AUDIT_FETCHING.delete(id); }
   }));
-  if (onDone) onDone();
+  // only re-render when something new landed, so this cannot loop
+  if (arrived && onDone) onDone();
+}
+
+// Watch for audits queued by a scan that has just finished. Stops as
+// soon as every container has one, or after ~40s if the container is
+// simply not readable.
+function pollAudits(ids, onDone, tries){
+  const list = [...new Set((ids || []).filter(Boolean))];
+  const missing = () => list.filter(id => !AUDITS[id]);
+  if (!list.length || !missing().length) return;
+  if (tries === undefined) tries = 8;
+  loadAudits(ids, onDone).then(() => {
+    if (tries > 0 && missing().length)
+      setTimeout(() => pollAudits(ids, onDone, tries - 1), 5000);
+  });
 }
 
 function containerAuditHtml(r){
