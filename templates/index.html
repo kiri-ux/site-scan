@@ -301,7 +301,10 @@
 <nav class="tabs">
   <button class="tab on" id="tab-scan" onclick="showTab('scan')">Scan</button>
   <button class="tab" id="tab-recurring" onclick="showTab('recurring')">Recurring scans</button>
-  <button class="tab gold" id="tab-market" onclick="showTab('market')">Build vs market</button>
+  <!-- Build vs market: internal pricing/positioning, hidden from the tab
+       bar. The view still exists - showTab('market') from the console
+       reaches it - so nothing is lost. -->
+  <button class="tab gold" id="tab-market" onclick="showTab('market')" style="display:none">Build vs market</button>
   <button class="tab" id="tab-rollout" onclick="showTab('rollout')">Rollout notes</button>
   <button class="tab" id="laws-toggle" onclick="toggleLaws()" style="margin-left:auto">US tracking laws &#9662;</button>
 </nav>
