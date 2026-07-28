@@ -984,7 +984,11 @@ function renderGroup(g, cg, verBar){
       ${groupBadge(g.items)}
       <span class="rg-name">${title}</span>
       ${(() => {
-        let pn = g.items.map(x => x.r.partner_name).find(Boolean);
+        // Partner is a client-level fact. Looking only at the selected
+        // run loses it whenever a re-scan was run without re-entering
+        // the form, so search every run for this client.
+        let pn = (cg ? cg.runs : [g]).flatMap(x => x.items)
+                   .map(x => x.r.partner_name).find(Boolean);
         if (!pn) {
           const mu = normUrl(mainItem(g).r.url);
           const s = (schedSites || []).find(x => normUrl(x.url) === mu);
