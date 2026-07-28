@@ -40,6 +40,7 @@ MIN_CALL_INTERVAL = 4.2
 INDEX_TTL = 3600
 
 _lock = threading.Lock()
+_build_lock = threading.Lock()
 _last_call = 0.0
 _index = None
 _index_built = 0.0
@@ -118,6 +119,17 @@ def build_index(force=False):
     global _index, _index_built
     if _index is not None and not force and time.time() - _index_built < INDEX_TTL:
         return _index
+    # One builder at a time. Every call costs one paced request per
+    # account, so two concurrent builds double the wall time for both.
+    with _build_lock:
+        if _index is not None and not force \
+                and time.time() - _index_built < INDEX_TTL:
+            return _index
+        return _build_index_locked()
+
+
+def _build_index_locked():
+    global _index, _index_built
     idx, errors = {}, {}
     for label in _tokens():
         try:
@@ -485,3 +497,20 @@ def refresh_async(public_ids, get_cached, store):
 
     threading.Thread(target=worker, daemon=True).start()
     return queued
+
+
+def warm_index():
+    """Build the container index at startup rather than inside the first
+    request that needs it. The first build costs one paced call per GTM
+    account, which is enough to time a web request out."""
+    if not enabled():
+        return
+
+    def go():
+        try:
+            n = len(build_index())
+            print(f"[gtm] index warmed: {n} containers", flush=True)
+        except Exception as e:
+            print(f"[gtm] index warm failed: {e}", flush=True)
+
+    threading.Thread(target=go, daemon=True).start()

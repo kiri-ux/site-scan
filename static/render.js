@@ -379,20 +379,39 @@ function pollAudits(ids, onDone, tries){
 // failed scan gives us.
 const AUDIT_BY_URL = {};
 
+const AUDIT_URL_TRIED = new Set();
+
+function _rootDomain(u){
+  try {
+    const h = new URL(/^https?:\/\//i.test(u) ? u : 'https://' + u)
+      .hostname.toLowerCase().replace(/^www\./, '');
+    const p = h.split('.');
+    return p.length > 2 ? p.slice(-2).join('.') : h;
+  } catch(e){ return u || ''; }
+}
+
 async function loadAuditByUrl(url, onDone){
-  if (!url || url in AUDIT_BY_URL) return;
-  AUDIT_BY_URL[url] = null;
+  if (!url) return;
+  // Every page of a blocked client resolves to the same container -
+  // one lookup per domain, not one per page.
+  const root = _rootDomain(url);
+  if (AUDIT_URL_TRIED.has(root)) {
+    if (AUDIT_BY_URL[root]) AUDIT_BY_URL[url] = AUDIT_BY_URL[root];
+    return;
+  }
+  AUDIT_URL_TRIED.add(root);
   try {
     const d = await (await fetch(`/gtm/audit-by-url?url=${encodeURIComponent(url)}`)).json();
     if (d.public_id){
       AUDIT_BY_URL[url] = d.public_id;
+      AUDIT_BY_URL[root] = d.public_id;
       if (d.audit){ AUDITS[d.public_id] = d.audit; if (onDone) onDone(); }
     }
-  } catch(e){ /* leave unresolved - the report falls back */ }
+  } catch(e){ AUDIT_URL_TRIED.delete(root); }
 }
 
 function containerAuditHtml(r){
-  const byUrl = AUDIT_BY_URL[r.url];
+  const byUrl = AUDIT_BY_URL[r.url] || AUDIT_BY_URL[_rootDomain(r.url)];
   const ids = [...(((r.gtm || {}).container_ids) || []),
                ...(byUrl ? [byUrl] : [])];
   const found = ids.map(id => AUDITS[id]).filter(a => a && a.status === 'ok');
@@ -415,7 +434,7 @@ function containerAuditHtml(r){
     // Tags with no vendor fingerprint are usually UI scripts, not
     // trackers - counted, not listed, so they don't read as findings.
     const other = tags.length - known.length;
-    const viaDomain = AUDIT_BY_URL[r.url] === a.public_id;
+    const viaDomain = byUrl === a.public_id && !(((r.gtm || {}).container_ids) || []).length;
     return `<h3>Container configuration${a._age_days > 1 ? ` <span class="evidence">(read ${Math.round(a._age_days)} days ago)</span>` : ''}</h3>
       ${viaDomain ? `<div class="cm-note ok">The page could not be loaded, but its GTM container was found by name and read directly. Nothing below is observed behaviour - it is how the container is configured.</div>` : ''}
       <p class="kv">${a.public_id} &middot; <b>${tags.length}</b> tag${tags.length === 1 ? '' : 's'}, <b>${gated}</b> with consent checks configured${other ? ` &middot; ${other} with no vendor fingerprint (usually UI scripts, not trackers)` : ''}</p>

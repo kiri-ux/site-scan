@@ -105,6 +105,11 @@ try:
 except Exception as e:  # DB down shouldn't kill the app - fall back to local
     print(f"DB init failed, running without persistence: {e}")
 
+try:  # build the GTM container index now, not inside the first request
+    gtm_api.warm_index()
+except Exception as e:
+    print(f"gtm warm failed: {e}")
+
 
 @app.get("/")
 def index():
@@ -199,13 +204,17 @@ def gtm_audit_by_url():
     being unreachable says nothing about the container."""
     url = request.args.get("url", "")
     try:
+        if not gtm_api.enabled():
+            return jsonify({"public_id": None, "audit": None,
+                            "reason": "GTM API not configured"})
         pid = gtm_api.find_by_domain(url)
         if not pid:
-            return jsonify({"public_id": None, "audit": None})
+            return jsonify({"public_id": None, "audit": None,
+                            "reason": "no container name matches this domain"})
         return jsonify({"public_id": pid, "audit": _audit_or_fetch(pid)})
     except Exception as e:
         print(f"gtm_audit_by_url failed: {e}")
-        return jsonify({"public_id": None, "audit": None})
+        return jsonify({"public_id": None, "audit": None, "reason": str(e)})
 
 
 @app.get("/gtm/coverage")
