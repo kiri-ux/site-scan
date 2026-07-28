@@ -374,12 +374,27 @@ function pollAudits(ids, onDone, tries){
   });
 }
 
+// A blocked page never reveals its container ID, so it is resolved
+// from the site's domain instead. Keyed by URL because that is all a
+// failed scan gives us.
+const AUDIT_BY_URL = {};
+
+async function loadAuditByUrl(url, onDone){
+  if (!url || url in AUDIT_BY_URL) return;
+  AUDIT_BY_URL[url] = null;
+  try {
+    const d = await (await fetch(`/gtm/audit-by-url?url=${encodeURIComponent(url)}`)).json();
+    if (d.public_id){
+      AUDIT_BY_URL[url] = d.public_id;
+      if (d.audit){ AUDITS[d.public_id] = d.audit; if (onDone) onDone(); }
+    }
+  } catch(e){ /* leave unresolved - the report falls back */ }
+}
+
 function containerAuditHtml(r){
-  // gtm_by_domain is set when the page could not be loaded and the
-  // container was resolved from its name instead - the configuration
-  // is still readable even when the site is not.
+  const byUrl = AUDIT_BY_URL[r.url];
   const ids = [...(((r.gtm || {}).container_ids) || []),
-               ...(r.gtm_by_domain ? [r.gtm_by_domain] : [])];
+               ...(byUrl ? [byUrl] : [])];
   const found = ids.map(id => AUDITS[id]).filter(a => a && a.status === 'ok');
   if (!found.length) return '';
   return found.map(a => {
@@ -400,7 +415,7 @@ function containerAuditHtml(r){
     // Tags with no vendor fingerprint are usually UI scripts, not
     // trackers - counted, not listed, so they don't read as findings.
     const other = tags.length - known.length;
-    const viaDomain = r.gtm_by_domain === a.public_id;
+    const viaDomain = AUDIT_BY_URL[r.url] === a.public_id;
     return `<h3>Container configuration${a._age_days > 1 ? ` <span class="evidence">(read ${Math.round(a._age_days)} days ago)</span>` : ''}</h3>
       ${viaDomain ? `<div class="cm-note ok">The page could not be loaded, but its GTM container was found by name and read directly. Nothing below is observed behaviour - it is how the container is configured.</div>` : ''}
       <p class="kv">${a.public_id} &middot; <b>${tags.length}</b> tag${tags.length === 1 ? '' : 's'}, <b>${gated}</b> with consent checks configured${other ? ` &middot; ${other} with no vendor fingerprint (usually UI scripts, not trackers)` : ''}</p>

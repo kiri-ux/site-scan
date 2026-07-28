@@ -53,7 +53,7 @@ app.secret_key = (os.environ.get("SECRET_KEY")
                   ).hexdigest())
 app.permanent_session_lifetime = timedelta(days=30)
 
-_OPEN_PREFIXES = ("/run/", "/api/run/", "/static/", "/gtm/audit/")
+_OPEN_PREFIXES = ("/run/", "/api/run/", "/static/", "/gtm/audit")
 _OPEN_PATHS = {"/health", "/favicon.ico", "/login"}
 
 
@@ -151,31 +151,61 @@ def scan():
         except Exception as e:
             print(f"gtm refresh failed: {e}")
 
-    # A blocked or failed scan never sees the container ID, so fall back
-    # to matching the domain against container names. Nothing else about
-    # the site is readable - the configuration still is.
-    if not result.get("ok") or result.get("inconclusive"):
-        try:
-            pid = gtm_api.find_by_domain(result.get("url", ""))
-            if pid:
-                result["gtm_by_domain"] = pid
-                gtm_api.refresh_async([pid], db.get_audit, db.save_audit)
-        except Exception as e:
-            print(f"gtm domain lookup failed: {e}")
+
     return jsonify(result)
+
+
+def _audit_or_fetch(public_id):
+    """Cached audit, or read it now and cache it.
+
+    Fetching here rather than in a background thread: on a recycling
+    web worker a daemon thread may not outlive the request that started
+    it, and a scan whose audit silently never lands is worse than one
+    that takes a few seconds. The frontend polls this, so it is never
+    in front of a scan.
+    """
+    if not public_id:
+        return None
+    cached = db.get_audit(public_id)
+    if cached and not gtm_api.needs_refresh(cached):
+        return cached
+    if not gtm_api.enabled():
+        return cached
+    r = gtm_api.audit(public_id)
+    try:
+        db.save_audit(public_id, r.get("status", "error"), r)
+    except Exception as e:
+        print(f"save_audit failed: {e}")
+    return db.get_audit(public_id) or r
 
 
 @app.get("/gtm/audit/<public_id>")
 def gtm_audit(public_id):
-    """Cached container configuration. Returns null rather than an
-    error when there is nothing cached - no audit is the normal case
+    """Container configuration for a known GTM ID. Returns null rather
+    than an error when it cannot be read - no audit is the normal case
     for a client-owned container, and the report falls back to
     fingerprint attribution there."""
     try:
-        return jsonify({"audit": db.get_audit(public_id)})
+        return jsonify({"audit": _audit_or_fetch(public_id)})
     except Exception as e:
         print(f"gtm_audit failed: {e}")
         return jsonify({"audit": None})
+
+
+@app.get("/gtm/audit-by-url")
+def gtm_audit_by_url():
+    """For a page the scanner could not load: resolve the container from
+    the site's domain against container names, then read it. The site
+    being unreachable says nothing about the container."""
+    url = request.args.get("url", "")
+    try:
+        pid = gtm_api.find_by_domain(url)
+        if not pid:
+            return jsonify({"public_id": None, "audit": None})
+        return jsonify({"public_id": pid, "audit": _audit_or_fetch(pid)})
+    except Exception as e:
+        print(f"gtm_audit_by_url failed: {e}")
+        return jsonify({"public_id": None, "audit": None})
 
 
 @app.get("/gtm/coverage")

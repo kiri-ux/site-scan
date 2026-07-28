@@ -1114,7 +1114,8 @@ function render(){
   const all = sortedClients();
   renderFilters(all);
   // container audits arrive from cache after the fact; re-render once
-  loadAudits(results.flatMap(r => [...(((r.gtm || {}).container_ids) || []), ...(r.gtm_by_domain ? [r.gtm_by_domain] : [])]), render);
+  loadAudits(results.flatMap(r => ((r.gtm || {}).container_ids) || []), render);
+  results.filter(r => r.inconclusive).forEach(r => loadAuditByUrl(r.url, render));
   const vis = visibleClients(all);
   $('results').innerHTML = vis.map(renderClient).join('')
     || (results.length ? `<p class="empty">No clients match these filters.</p>` : '');
@@ -1283,7 +1284,8 @@ async function run(){
   $('bar-fill').style.width = '100%';
   $('progress-label').textContent = 'Done';
   // audits are queued by the server as each scan saves; poll for them
-  pollAudits(results.flatMap(r => [...(((r.gtm || {}).container_ids) || []), ...(r.gtm_by_domain ? [r.gtm_by_domain] : [])]), render);
+  pollAudits(results.flatMap(r => ((r.gtm || {}).container_ids) || []), render);
+  results.filter(r => r.inconclusive).forEach(r => loadAuditByUrl(r.url, render));
   $('go').disabled = false;
 }
 
