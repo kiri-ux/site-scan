@@ -412,12 +412,19 @@ async function loadAuditByUrl(url, onDone){
 
 function containerAuditHtml(r){
   const byUrl = AUDIT_BY_URL[r.url] || AUDIT_BY_URL[_rootDomain(r.url)];
-  const ids = [...(((r.gtm || {}).container_ids) || []),
-               ...(byUrl ? [byUrl] : [])];
+  // dedupe: a container found on the page can also match by domain
+  const ids = [...new Set([...(((r.gtm || {}).container_ids) || []),
+                           ...(byUrl ? [byUrl] : [])])];
   const found = ids.map(id => AUDITS[id]).filter(a => a && a.status === 'ok');
   if (!found.length) return '';
   return found.map(a => {
     const tags = a.tags || [];
+    // An empty container is a finding in its own right, not a blank
+    // section: it means the tags are somewhere else - hardcoded in the
+    // theme, or in a different container than the one named for this
+    // client - or were never deployed.
+    if (!tags.length) return `<h3>Container configuration</h3>
+      <div class="cm-note warn">&#9888; <b>${a.public_id} is empty</b> &mdash; no tags, triggers or variables, and it has never been published with any${a.version_name === 'Empty Container' ? 'thing' : ' content'}. ${((r.gtm || {}).container_ids || []).length ? 'Whatever is firing on this site is not coming from this container.' : 'Any pixels on this site are hardcoded in the page, running through a different container, or were never deployed.'}</div>`;
     const gated = tags.filter(t => t.consent_status === 'NEEDED').length;
     const known = tags.filter(t => t.vendor);
     const rows = known.map(t => {
