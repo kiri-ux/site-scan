@@ -146,11 +146,22 @@ def scan():
         try:
             # Queue container audits in the background. Never inline:
             # the API quota would put a scan behind every other scan.
-            gtm_api.refresh_async(
-                (result.get("gtm") or {}).get("container_ids") or [],
-                db.get_audit, db.save_audit)
+            ids = list((result.get("gtm") or {}).get("container_ids") or [])
+            gtm_api.refresh_async(ids, db.get_audit, db.save_audit)
         except Exception as e:
             print(f"gtm refresh failed: {e}")
+
+    # A blocked or failed scan never sees the container ID, so fall back
+    # to matching the domain against container names. Nothing else about
+    # the site is readable - the configuration still is.
+    if not result.get("ok") or result.get("inconclusive"):
+        try:
+            pid = gtm_api.find_by_domain(result.get("url", ""))
+            if pid:
+                result["gtm_by_domain"] = pid
+                gtm_api.refresh_async([pid], db.get_audit, db.save_audit)
+        except Exception as e:
+            print(f"gtm domain lookup failed: {e}")
     return jsonify(result)
 
 

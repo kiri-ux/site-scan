@@ -184,7 +184,7 @@ function draw(){
   $('t-name').textContent = g.name || main.r.url;
   $('t-when').textContent = `${items.length} page${items.length>1?'s':''} \u00b7 ${main.r.scanned_local || ''}`;
   $('title').style.display = 'flex';
-  loadAudits(items.map(x => x.r).flatMap(r => ((r.gtm || {}).container_ids) || []), draw);
+  loadAudits(items.map(x => x.r).flatMap(r => [...(((r.gtm || {}).container_ids) || []), ...(r.gtm_by_domain ? [r.gtm_by_domain] : [])]), draw);
   $('pages').innerHTML =
     `<div class="site open"><div class="site-body">${chainFor(main.r, {states: false})}<div class="detail">${cmBlock(main.r)}${cmpEvidenceHtml(main.r)}${stateChecksHtml(siteCheckResult(items.map(x => x.r), main.r))}${actionItemsHtml(items.map(i => i.r), main.r.implementation || '')}</div></div></div>`
     + items.map(({r, i}) => renderSite(r, i, main.r)).join('');

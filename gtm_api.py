@@ -240,6 +240,47 @@ def _summarize(version):
     }
 
 
+def _host_tokens(text):
+    """Domain-ish tokens in a string, minus the noise words that appear
+    in every container name."""
+    import re as _re
+    out = set()
+    for m in _re.finditer(r"([a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+)", (text or "").lower()):
+        h = m.group(1)
+        if h.startswith("www."):
+            h = h[4:]
+        if "." in h and not h.endswith((".js", ".html", ".php")):
+            out.add(h)
+    return out
+
+
+def find_by_domain(url):
+    """Resolve a scanned URL to a container by matching its host against
+    container NAMES.
+
+    Vici names containers after the client and site - "365 Fitness -
+    my365fit.com" - so a site the scanner could not load (bot block,
+    outage) can still be looked up. Depends on naming discipline, so it
+    returns nothing rather than guessing when the match is not exact.
+    """
+    if not enabled():
+        return None
+    host = ""
+    for h in _host_tokens(url):
+        host = h
+        break
+    if not host:
+        return None
+    root = ".".join(host.split(".")[-2:]) if host.count(".") >= 1 else host
+    hits = []
+    for pid, info in build_index().items():
+        names = _host_tokens(info.get("container_name", ""))
+        if host in names or root in names:
+            hits.append(pid)
+    # two containers claiming the same domain is not something to guess at
+    return hits[0] if len(hits) == 1 else None
+
+
 def audit(public_id):
     """Read a container's PUBLISHED configuration.
 
