@@ -180,13 +180,33 @@ def gtm_audit(public_id):
 
 @app.get("/gtm/coverage")
 def gtm_coverage():
+    """Cached-audit counts plus what the authorized logins can actually
+    reach. ?url=... additionally reports whether that site's container
+    would be found by name - the diagnostic for a blocked scan showing
+    no container configuration."""
     try:
         cov = db.audit_coverage()
         cov["api_configured"] = gtm_api.enabled()
+        if gtm_api.enabled():
+            try:
+                idx = gtm_api.build_index()
+                accounts = {}
+                for info in idx.values():
+                    accounts[info["account_name"]] = \
+                        accounts.get(info["account_name"], 0) + 1
+                cov["reachable_containers"] = len(idx)
+                cov["accounts"] = accounts
+            except Exception as e:
+                cov["index_error"] = str(e)
+            url = request.args.get("url", "")
+            if url:
+                cov["domain_lookup"] = {
+                    "url": url, "matched": gtm_api.find_by_domain(url)}
         return jsonify(cov)
     except Exception as e:
         print(f"gtm_coverage failed: {e}")
-        return jsonify({"enabled": False, "api_configured": False})
+        return jsonify({"enabled": False, "api_configured": False,
+                        "error": str(e)})
 
 
 @app.get("/history")

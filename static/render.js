@@ -475,6 +475,11 @@ function cmpDiffHtml(r, siteNames){
 }
 
 function chainFor(r, opts){
+  // Every cell in the strip describes observed behaviour. On a page
+  // that never loaded, "no CMP" and "no pre-consent trackers" are the
+  // block talking - and the second one renders green, which reads as a
+  // pass on a site nothing is known about.
+  if (r.inconclusive) return '';
   const withStates = !(opts && opts.states === false);
   const cmpNames = r.cmps.map(c => c.name).join(', ');
   // No banner is a finding where a state expects an accessible opt-out.
