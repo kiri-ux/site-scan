@@ -1119,7 +1119,10 @@ function render(){
   renderFilters(all);
   // container audits arrive from cache after the fact; re-render once
   loadAudits(results.flatMap(r => ((r.gtm || {}).container_ids) || []), render);
-  results.filter(r => r.inconclusive).forEach(r => loadAuditByUrl(r.url, render));
+  // any result with no container ID - blocked, timed out, basic mode -
+  // is worth resolving by domain; having the ID means we do not need to
+  results.filter(r => !(((r.gtm || {}).container_ids) || []).length)
+         .forEach(r => loadAuditByUrl(r.url, render));
   const vis = visibleClients(all);
   $('results').innerHTML = vis.map(renderClient).join('')
     || (results.length ? `<p class="empty">No clients match these filters.</p>` : '');
@@ -1289,7 +1292,10 @@ async function run(){
   $('progress-label').textContent = 'Done';
   // audits are queued by the server as each scan saves; poll for them
   pollAudits(results.flatMap(r => ((r.gtm || {}).container_ids) || []), render);
-  results.filter(r => r.inconclusive).forEach(r => loadAuditByUrl(r.url, render));
+  // any result with no container ID - blocked, timed out, basic mode -
+  // is worth resolving by domain; having the ID means we do not need to
+  results.filter(r => !(((r.gtm || {}).container_ids) || []).length)
+         .forEach(r => loadAuditByUrl(r.url, render));
   $('go').disabled = false;
 }
 
