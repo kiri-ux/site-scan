@@ -141,6 +141,24 @@ function ownerBadge(owner){
   return `<span class="ob ob-un" data-tip="Owner depends on who manages the tags - set Implementation (Vici-owned GTM vs Client placement) on the scan form to resolve">SET IMPLEMENTATION</span>`;
 }
 
+// A Vici-named container that is empty and was never seen on the page
+// means the client moved to their own setup. The stale one sits in
+// Vici's GTM account making the container list less trustworthy, so it
+// is the buyer's to clean up - and it is internal work, not something a
+// client should read on a share link.
+function staleContainers(rs){
+  if (SHARE_MASK()) return [];
+  const seenIds = new Set((rs || []).flatMap(r => ((r.gtm || {}).container_ids) || []));
+  return [...new Set((rs || []).map(r => AUDIT_BY_URL[_rootDomain(r.url)]).filter(Boolean))]
+    .filter(pid => !seenIds.has(pid))
+    .filter(pid => { const a = AUDITS[pid]; return a && a.status === 'ok' && !(a.tags || []).length; });
+}
+
+function staleContainerText(rs){
+  const s = staleContainers(rs);
+  return `Deprecate ${s.join(', ')} in Vici's GTM account - the container is empty and was not found on the site, so this client is running their own container or standalone pixels. Confirm with the buyer before removing.`;
+}
+
 function actionItemsHtml(rs, impl){
   if (!rs || !rs.length) return '';
   // A page that didn't load produces false work ("install or repair
@@ -156,7 +174,9 @@ function actionItemsHtml(rs, impl){
       b.html_len ? `${Math.round(b.html_len / 1024)} KB of HTML` : null,
       (b.final_url && b.final_url !== b.url) ? `redirected to ${b.final_url}` : null
     ].filter(Boolean);
-    return `<h3>Action items</h3><div class="cm-note warn">&#9888; <b>No action items - this scan is inconclusive.</b> ${b.verdict_detail || 'The page did not load fully.'} Nothing here should be treated as a finding about the site.${ev.length ? `<div class="evidence" style="margin-top:6px">What the scanner received: ${ev.join(' &middot; ')}.</div>` : ''}</div>`;
+    const stale = staleContainers(rs).length
+      ? `<ul><li>${ownerBadge('VICI')}<div>${staleContainerText(rs)}</div></li></ul>` : '';
+    return `<h3>Action items</h3><div class="cm-note warn">&#9888; <b>No action items about the site - this scan is inconclusive.</b> ${b.verdict_detail || 'The page did not load fully.'} Nothing here should be treated as a finding about the site.${ev.length ? `<div class="evidence" style="margin-top:6px">What the scanner received: ${ev.join(' &middot; ')}.</div>` : ''}</div>${stale}`;
   }
   const pixOwner = impl === 'Vici-owned GTM' ? 'VICI' : impl === 'Client placement' ? 'CLIENT' : 'UNSET';
   const main = rs.slice().sort((a,b) => (a.url||'').length - (b.url||'').length)[0];
@@ -312,6 +332,9 @@ function actionItemsHtml(rs, impl){
 
   if (!items.length) return '';
   // dedupe identical opt-out/GPC lines that repeat per state group
+  if (staleContainers(rs).length)
+    push('VICI', staleContainerText(rs), 80);
+
   const seen = new Set();
   const rows = items.filter(it => { const k = it.owner + it.text; if (seen.has(k)) return false; seen.add(k); return true; });
   // Group each owner's work together so nobody reads past items that
@@ -423,8 +446,18 @@ function containerAuditHtml(r){
     // section: it means the tags are somewhere else - hardcoded in the
     // theme, or in a different container than the one named for this
     // client - or were never deployed.
-    if (!tags.length) return `<h3>Container configuration</h3>
-      <div class="cm-note warn">&#9888; <b>${a.public_id} is empty</b> &mdash; no tags, triggers or variables, and it has never been published with any${a.version_name === 'Empty Container' ? 'thing' : ' content'}. ${((r.gtm || {}).container_ids || []).length ? 'Whatever is firing on this site is not coming from this container.' : 'Any pixels on this site are hardcoded in the page, running through a different container, or were never deployed.'}</div>`;
+    if (!tags.length){
+      // Matched by name, not seen on the page: this is a Vici-named
+      // container that may have nothing to do with the live site. The
+      // usual cause is a client who moved to their own container and
+      // was given standalone pixels - so do not imply the site is
+      // untagged.
+      const guessed = !((r.gtm || {}).container_ids || []).length;
+      return `<h3>Container configuration</h3>
+      <div class="cm-note warn">&#9888; <b>${a.public_id} is empty</b> &mdash; no tags, triggers or variables, and it has never been published with any${a.version_name === 'Empty Container' ? 'thing' : ' content'}. ${guessed
+        ? 'This container was matched by name, not observed on the page, so it may be a leftover: the site is most likely running the client\'s own container, which Vici has no access to, or pixels placed directly in the page.'
+        : 'Whatever is firing on this site is not coming from this container.'}</div>`;
+    }
     const gated = tags.filter(t => t.consent_status === 'NEEDED').length;
     const known = tags.filter(t => t.vendor);
     const rows = known.map(t => {
