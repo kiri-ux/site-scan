@@ -347,19 +347,19 @@ def audit(public_id):
             # to one we cannot see - rebuild once before saying so
             hit = build_index(force=True).get(pid)
         if not hit:
-            return {"status": "not_indexed", "public_id": pid,
+            return {"status": "not_indexed", "public_id": pid, "schema": AUDIT_SCHEMA,
                     "logins_failing": dict(_index_errors),
                     "detail": ("No authorized Vici login can see this "
                                "container - most likely a client-owned "
                                "GTM account.")}
         version = _call(_service(hit["identity"]).accounts().containers()
                         .versions().live(parent=hit["path"]))
-        out = {"status": "ok", "public_id": pid}
+        out = {"status": "ok", "public_id": pid, "schema": AUDIT_SCHEMA}
         out.update(hit)
         out.update(_summarize(version))
         return out
     except Exception as e:
-        return {"status": "error", "public_id": pid,
+        return {"status": "error", "public_id": pid, "schema": AUDIT_SCHEMA,
                 "detail": f"{e.__class__.__name__}: {e}"}
 
 
@@ -477,12 +477,19 @@ if __name__ == "__main__":
 # so re-asking every scan only burns quota.
 STALE_DAYS = {"ok": 7, "not_indexed": 30, "error": 1}
 
+# Bump when the audit gains a field the report depends on. A cached
+# audit below the current version is refetched regardless of its age,
+# so a capability change does not wait out a seven-day cache.
+AUDIT_SCHEMA = 2
+
 _inflight = set()
 _inflight_lock = threading.Lock()
 
 
 def needs_refresh(cached):
     if cached is None:
+        return True
+    if cached.get("schema", 1) < AUDIT_SCHEMA:
         return True
     return (cached.get("_age_days", 0)
             >= STALE_DAYS.get(cached.get("_status"), 7))

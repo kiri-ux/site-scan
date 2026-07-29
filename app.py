@@ -160,7 +160,7 @@ def scan():
     return jsonify(result)
 
 
-def _audit_or_fetch(public_id):
+def _audit_or_fetch(public_id, force=False):
     """Cached audit, or read it now and cache it.
 
     Fetching here rather than in a background thread: on a recycling
@@ -172,7 +172,7 @@ def _audit_or_fetch(public_id):
     if not public_id:
         return None
     cached = db.get_audit(public_id)
-    if cached and not gtm_api.needs_refresh(cached):
+    if cached and not force and not gtm_api.needs_refresh(cached):
         return cached
     if not gtm_api.enabled():
         return cached
@@ -191,7 +191,8 @@ def gtm_audit(public_id):
     for a client-owned container, and the report falls back to
     fingerprint attribution there."""
     try:
-        return jsonify({"audit": _audit_or_fetch(public_id)})
+        force = request.args.get("refresh") == "1"
+        return jsonify({"audit": _audit_or_fetch(public_id, force)})
     except Exception as e:
         print(f"gtm_audit failed: {e}")
         return jsonify({"audit": None})
@@ -211,7 +212,8 @@ def gtm_audit_by_url():
         if not pid:
             return jsonify({"public_id": None, "audit": None,
                             "reason": "no container name matches this domain"})
-        return jsonify({"public_id": pid, "audit": _audit_or_fetch(pid)})
+        force = request.args.get("refresh") == "1"
+        return jsonify({"public_id": pid, "audit": _audit_or_fetch(pid, force)})
     except Exception as e:
         print(f"gtm_audit_by_url failed: {e}")
         return jsonify({"public_id": None, "audit": None, "reason": str(e)})
