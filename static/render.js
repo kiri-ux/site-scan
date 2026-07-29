@@ -584,8 +584,11 @@ function containerAuditHtml(r, allResults){
       const cls = gatedN === n ? 'ok' : gatedN ? 'warn' : 'bad';
       const label = gatedN === n ? 'gated' : gatedN ? `${gatedN}/${n} gated` : 'not gated';
       const notes = [`${n} tag${n === 1 ? '' : 's'}`];
-      const vendors = [...new Set(grp.tags.map(t => t.vendor))];
-      if (vendors.length > 1 || vendors[0] !== grp.label) notes.push(vendors.join(', '));
+      // Vendors that map to a product are never named - the buyer
+      // thinks in products, and the DSP is not theirs to see.
+      const vendors = [...new Set(grp.tags.map(t => t.vendor))]
+        .filter(v => !VENDOR_PRODUCT[v] && v !== grp.label);
+      if (vendors.length) notes.push(vendors.join(', '));
       const paused = grp.tags.filter(t => t.paused).length;
       if (paused) notes.push(`${paused} paused`);
       const fired = grp.tags.some(t => seen.has(t.vendor));
@@ -766,6 +769,37 @@ function chainFor(r, opts){
     </div>`;
 }
 
+// Tags whose triggers match THIS page, with whether the product was
+// observed firing on it. The container summary says what exists; this
+// says what should have happened on the page in front of you.
+function pageTagsHtml(r){
+  const ids = (((r.gtm || {}).container_ids) || []);
+  const audits = ids.map(id => AUDITS[id]).filter(a => a && a.status === 'ok');
+  if (!audits.length || r.inconclusive) return '';
+  const seen = observedVendors([r]);
+  const groups = [];
+  const byLabel = {};
+  for (const a of audits)
+    for (const t of (a.tags || [])){
+      if (!t.vendor) continue;
+      if (tagExpectation(t, [r.url]) !== 'expected') continue;
+      const label = VENDOR_PRODUCT[t.vendor] || t.vendor;
+      if (!byLabel[label]) { byLabel[label] = {label, tags: [], fired: false}; groups.push(byLabel[label]); }
+      byLabel[label].tags.push(t);
+      if (seen.has(t.vendor)) byLabel[label].fired = true;
+    }
+  if (!groups.length) return '';
+  const rows = groups.map(g => {
+    const n = g.tags.length;
+    const list = g.tags.map(t =>
+      `<li>${t.name} <span class="evidence">&mdash; ${(t.firing_triggers || []).join(', ') || 'no trigger'}</span></li>`).join('');
+    return `<li><span class="badge ${g.fired ? 'ok' : 'bad'}">${g.fired ? 'firing' : 'not seen firing'}</span>
+      <div><b>${g.label}</b> <span class="evidence">${n} tag${n === 1 ? '' : 's'} set to fire on this page</span>
+      <ol style="margin:4px 0 0 18px;padding:0;font-size:12.5px">${list}</ol></div></li>`;
+  }).join('');
+  return `<h3>Container tags set to fire on this page</h3><ul>${rows}</ul>`;
+}
+
 function renderSite(r, i, site){
   const meta = VERDICT_META[r.verdict] || VERDICT_META.error;
   const prods = r.products || [];
@@ -786,7 +820,7 @@ function renderSite(r, i, site){
   else if (!site && mineDef)
     kvBits.push(`<span class="kv"${tipAttr('defaults')}>Defaults: <b>${mineDef}</b></span>`);
 
-  const cmpDetail = cmpDiffHtml(r, site && (site.cmps || []).map(c => c.name));
+  const cmpDetail = pageTagsHtml(r) + cmpDiffHtml(r, site && (site.cmps || []).map(c => c.name));
 
   const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
   // group hits that belong to a selected product under the product name
