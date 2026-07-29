@@ -724,6 +724,69 @@ function toggleState(s){
   renderStateChips();
 }
 
+// How long the browser waits on one /scan request. A full scan opens
+// three browser contexts and can sit through two bot-challenge retries,
+// so the realistic worst case is a few minutes - and a page can queue
+// behind another scan before it even starts. Below this the browser was
+// abandoning scans that then finished normally server-side.
+const SCAN_WAIT_MS = 300000;
+// After giving up, watch the DB for the result to land.
+const PENDING_POLL_MS = 15000, PENDING_POLL_TRIES = 24;
+
+function pendingItems(runId){
+  return results.filter(r => r && r.pending
+    && (runId == null || r.run_id === runId));
+}
+
+// Swap saved results in over any placeholder they match. Returns how
+// many placeholders were resolved.
+function adoptSaved(rows, runId){
+  let n = 0;
+  for (const row of (rows || [])){
+    if (!row || !row.url) continue;
+    const idx = results.findIndex(r => r && r.pending
+      && r.run_id === (row.run_id || runId)
+      && normUrl(r.url) === normUrl(row.url));
+    if (idx < 0) continue;
+    if (row.scanned_at_iso){
+      row.scanned_local = new Date(row.scanned_at_iso).toLocaleString([], {year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
+    }
+    results[idx] = row;
+    n++;
+  }
+  return n;
+}
+
+async function pollPending(runId, tries){
+  tries = tries == null ? PENDING_POLL_TRIES : tries;
+  if (!dbEnabled) return;            // nothing to recover from
+  if (!pendingItems(runId).length) return;
+  if (tries <= 0){
+    // Out of patience, and nothing ever saved. Now it really is a
+    // failed scan - say so rather than leaving "still running" up.
+    pendingItems(runId).forEach(r => {
+      r.pending = false;
+      r.verdict = 'error';
+      r.mode = '';
+      r.verdict_detail = 'No result was saved for this page - the scan did not finish. Re-run it.';
+    });
+    try { saveResults(); } catch(e){}
+    try { render(); } catch(e){}
+    return;
+  }
+  try {
+    const resp = await fetch(`/scans/run/${encodeURIComponent(runId)}`);
+    const d = await resp.json();
+    if (adoptSaved(d.results, runId)){
+      try { saveResults(); } catch(e){}
+      try { render(); } catch(e){}
+    }
+  } catch(e){ console.error('pending poll failed', e); }
+  if (pendingItems(runId).length){
+    setTimeout(() => pollPending(runId, tries - 1), PENDING_POLL_MS);
+  }
+}
+
 function saveResults(){
   if (dbEnabled) return; // server history is the source of truth
   try { localStorage.setItem(STORE_KEY, JSON.stringify(results.slice(-200))); }
@@ -1030,7 +1093,9 @@ function renderGroup(g, cg, verBar){
       ${(() => {
         // An inconclusive run has every product at 0/n because the page
         // never loaded. Showing those as failures blames the client for
-        // a block on our side.
+        // a block on our side. A pending run has not reported at all.
+        if (g.items.some(x => x.r.pending))
+          return `<span class="pstat">still running</span>`;
         if (g.items.every(x => x.r.inconclusive))
           return `<span class="pstat warn">scan blocked</span>`;
         return (mainItem(g).r.products || []).map(p => {
@@ -1076,6 +1141,7 @@ let FILTER_PARTNERS = [], FILTER_STATES = [];
 
 function clientSeverity(cg){
   const rs = (cg.runs[0].items || []).map(x => x.r);
+  if (rs.some(r => r.pending)) return 0;   // no verdict yet, not "clean"
   if (rs.some(r => r.inconclusive)) return 0;
   if (rs.some(r => (r.pre_consent || []).some(h => h.severity === 'violation')
                 || (r.post_reject || []).some(h => h.severity === 'violation'))) return 1;
@@ -1296,7 +1362,7 @@ async function run(){
       try { $('progress-label').textContent = `Scanning ${urls[i]}`; } catch(e){}
       try {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 150000);
+        const timer = setTimeout(() => ctrl.abort(), SCAN_WAIT_MS);
         const resp = await fetch('/scan', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -1310,10 +1376,16 @@ async function run(){
         insertResult(r);
       } catch (e) {
         console.error('scan request failed for', urls[i], e);
+        // The browser gave up waiting - that is NOT a finding about the
+        // site. The scan usually keeps running and saves server-side, so
+        // hold a placeholder and let pollPending swap in the real result.
         try {
-        insertResult({url: urls[i], ok:false, mode:'basic', verdict:'error',
-          run_id: runId, client_name: clientName, scanned_local: stamp(),
-          verdict_detail:'Request failed or timed out - if a deploy was in progress, wait for it to finish and re-run this page.',
+        insertResult({url: urls[i], ok:false, mode:'pending', verdict:'pending',
+          pending:true, run_id: runId, client_name: clientName,
+          partner_name: partnerName, scanned_local: stamp(),
+          verdict_detail: dbEnabled
+            ? 'Still running - the browser stopped waiting, but the scan is most likely still going server-side. This will fill in on its own when it finishes.'
+            : 'Still running - the browser stopped waiting. Re-run this page to see the result.',
           cmps:[], pre_consent:[], gtm:{found:false,container_ids:[]},
           banner_visible:'unknown', consent_mode_default:'unknown', consent_defaults:{}});
         } catch(e2){ console.error('error-card insert failed', e2); }
@@ -1323,6 +1395,9 @@ async function run(){
   await Promise.all(Array.from({length: Math.min(CONCURRENCY, urls.length)}, scanWorker));
   $('bar-fill').style.width = '100%';
   $('progress-label').textContent = 'Done';
+  // any page the browser stopped waiting on is probably still running
+  // server-side - watch for it to land rather than leaving a placeholder
+  pollPending(runId);
   // audits are queued by the server as each scan saves; poll for them
   pollAudits(results.flatMap(r => ((r.gtm || {}).container_ids) || []), render);
   // any result with no container ID - blocked, timed out, basic mode -

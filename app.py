@@ -260,6 +260,23 @@ def history():
         return jsonify({"enabled": False, "results": []})
 
 
+@app.get("/scans/run/<run_id>")
+def scans_run(run_id):
+    """Scans already saved for one run.
+
+    A slow page can outlive the browser's fetch timeout. The scan keeps
+    going server-side and saves normally, so the dashboard polls this to
+    swap its 'still running' placeholder for the real result instead of
+    leaving a failure on screen that never happened.
+    """
+    try:
+        return jsonify({"enabled": db.enabled(),
+                        "results": db.scans_for_run(str(run_id)[:64])})
+    except Exception as e:
+        print(f"scans_run failed: {e}")
+        return jsonify({"enabled": False, "results": []})
+
+
 @app.get("/sites")
 def sites():
     try:

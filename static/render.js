@@ -19,6 +19,7 @@ const TIPS = {
   'pre-consent fires': 'Trackers fired before consent on a page that has a consent banner - see Other pixels and the product rows.',
   'fires after reject': 'Trackers fired after Reject was clicked - see Requests after Reject.',
   'scan error': 'This page could not be fully scanned - the result may be incomplete. Re-run after checking the URL.',
+  'still running': 'The browser stopped waiting for this page, but the scan is most likely still going server-side. Nothing here is a finding about the site - the real result replaces this on its own when it lands.',
 };
 function tipAttr(key){ const t = TIPS[key]; return t ? ` data-tip="${t.replace(/"/g,'&quot;')}"` : ''; }
 
@@ -37,6 +38,7 @@ const VERDICT_META = {
   misconfigured:   {cls:'bad',     label:'Pre-consent fires'},
   cmp_found_basic: {cls:'neutral', label:'CMP found (basic)'},
   error:           {cls:'warn',    label:'Scan error'},
+  pending:         {cls:'neutral', label:'Still running'},
 };
 
 const CHAIN_TIPS = {
@@ -168,6 +170,10 @@ function staleContainerText(rs){
 
 function actionItemsHtml(rs, impl){
   if (!rs || !rs.length) return '';
+  // Nothing has reported yet - any action item would be invented.
+  const waiting = rs.filter(r => r.pending);
+  if (waiting.length === rs.length)
+    return `<h3>Action items</h3><div class="cm-note">&#8987; <b>Still waiting on this scan.</b> ${waiting[0].verdict_detail || ''} No action items until it reports.</div>`;
   // A page that didn't load produces false work ("install or repair
   // the pixel") - say the scan is unreliable instead.
   const bad = rs.filter(r => r.inconclusive);
@@ -635,7 +641,7 @@ function containerAuditHtml(r, allResults){
 function stateChecksHtml(r){
   // A blocked page finds no privacy policy link and contacts no
   // trackers on the GPC pass - both look like findings and neither is.
-  if (r.inconclusive) return '';
+  if (r.inconclusive || r.pending) return '';
   if (!(r.state_checks || []).length) return '';
   // combine rows where the same check+status+detail applies to several
   // states (detail differs only by the state name in "...for X
@@ -703,7 +709,7 @@ function chainFor(r, opts){
   // that never loaded, "no CMP" and "no pre-consent trackers" are the
   // block talking - and the second one renders green, which reads as a
   // pass on a site nothing is known about.
-  if (r.inconclusive) return '';
+  if (r.inconclusive || r.pending) return '';
   const withStates = !(opts && opts.states === false);
   const cmpNames = r.cmps.map(c => c.name).join(', ');
   // No banner is a finding where a state expects an accessible opt-out.
@@ -917,13 +923,14 @@ function renderSite(r, i, site){
   const headBadges = [
     rejV ? `<span class="badge bad"${tipAttr('fires after reject')}>fires after reject</span>` : '',
     r.verdict === 'misconfigured' && !rejV ? `<span class="badge bad"${tipAttr('pre-consent fires')}>pre-consent fires</span>` : '',
-    (missingProds.length && !r.inconclusive) ? `<span class="badge bad"${tipAttr('pixels missing')}>pixels missing</span>` : '',
+    (missingProds.length && !r.inconclusive && !r.pending) ? `<span class="badge bad"${tipAttr('pixels missing')}>pixels missing</span>` : '',
+    r.pending ? `<span class="badge neutral"${tipAttr('still running')}>still running</span>` : '',
     r.verdict === 'error' ? `<span class="badge warn"${tipAttr('scan error')}>scan error</span>` : '',
-    r.mode !== 'full' ? `<span class="badge neutral">${r.mode}</span>` : '',
+    (r.mode && r.mode !== 'full' && !r.pending) ? `<span class="badge neutral">${r.mode}</span>` : '',
   ].join('');
   // Nothing loaded, so every product reads 0/n - that is the block
   // talking, not the site. Show the reason instead.
-  const prodStat = r.inconclusive ? '' : prods.map(p => {
+  const prodStat = (r.inconclusive || r.pending) ? '' : prods.map(p => {
     const count = p.expected > 1 ? ` ${p.fired}/${p.expected}` : '';
     const cls = p.fired === 0 ? 'bad' : p.fired < p.expected ? 'warn' : 'ok';
     const mark = p.fired === 0 ? '&#10007;' : '&#10003;';
@@ -938,19 +945,19 @@ function renderSite(r, i, site){
       <span class="caret">&#9654;</span>
     </div>
     <div class="site-body">
-      ${r.verdict === 'error' || r.mode !== 'full' ? `<div class="verdict ${meta.cls}">${(r.verdict_lines && r.verdict_lines.length ? r.verdict_lines : [r.verdict_detail || r.error || '']).map(l => `<div class="vline">${l}</div>`).join('')}</div>` : ''}
+      ${r.pending || r.verdict === 'error' || r.mode !== 'full' ? `<div class="verdict ${meta.cls}">${(r.verdict_lines && r.verdict_lines.length ? r.verdict_lines : [r.verdict_detail || r.error || '']).map(l => `<div class="vline">${l}</div>`).join('')}</div>` : ''}
       ${kvBits.length ? `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;align-items:center">${kvBits.join('')}</div>` : ''}
       <div class="detail">${cmpDetail}${rejFires}${dspDetail}${fires}${gated}</div>
     </div>
   </div>`;
 }
 
-const VERDICT_RANK = {error:0, no_cmp:0, misconfigured:0, cmp_found_basic:1, ok:2};
+const VERDICT_RANK = {error:0, no_cmp:0, misconfigured:0, cmp_found_basic:1, pending:1, ok:2};
 
 function groupBadge(items){
   let worst = 2;
   items.forEach(({r}) => { worst = Math.min(worst, VERDICT_RANK[r.verdict] ?? 0); });
-  const anyMissing = items.some(({r}) => (r.products||[]).some(p => p.fired === 0));
+  const anyMissing = items.some(({r}) => !r.pending && (r.products||[]).some(p => p.fired === 0));
   const anyStateFail = items.some(({r}) => (r.state_checks||[]).some(c => c.status === 'fail'));
   if (worst === 0 || anyMissing || anyStateFail)
     return `<span class="st-ico bad" data-tip="Needs attention - open for findings and action items"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.6 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13.5"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg></span>`;
