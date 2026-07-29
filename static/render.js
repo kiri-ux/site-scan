@@ -520,8 +520,17 @@ function containerAuditHtml(r, allResults){
       // not scanned, or on a click - the scan only sees page load.
       const fired = grp.tags.some(t => seen.has(t.vendor));
       if (!fired) notes.push('not seen firing on the scanned pages');
+      // Per-tag detail behind a toggle: the trigger name is what tells a
+      // buyer whether a tag fires on load or on a click, which is the
+      // difference between "not firing" and "not firing yet".
+      const detail = grp.tags.map(t => {
+        const trig = (t.firing_triggers || []).length
+          ? t.firing_triggers.join(', ') : 'no firing trigger';
+        return `<li>${t.name} <span class="evidence">&mdash; ${trig}${t.paused ? ' &middot; paused' : ''}${t.consent_status === 'NEEDED' ? ` &middot; gated: ${(t.consent_types || []).join(', ')}` : ''}</span></li>`;
+      }).join('');
       return `<li><span class="badge ${cls}">${label}</span>
-        <div><b>${grp.label}</b> <span class="evidence">${notes.join(' &middot; ')}</span></div></li>`;
+        <div><b>${grp.label}</b> <span class="evidence">${notes.join(' &middot; ')}</span>
+        <details class="ai-proc"><summary>${n} tag${n === 1 ? '' : 's'} and their triggers</summary><ol>${detail}</ol></details></div></li>`;
     }).join('');
     // Tags with no vendor fingerprint are usually UI scripts, not
     // trackers - counted, not listed, so they don't read as findings.
@@ -610,7 +619,11 @@ function chainFor(r, opts){
   const cmpNames = r.cmps.map(c => c.name).join(', ');
   // No banner is a finding where a state expects an accessible opt-out.
   // With no state targeting set, it is a note, not a failure.
-  const cmpState = r.cmps.length ? 'pass'
+  // A notice-only bar is detected tech but not a consent mechanism, so
+  // it must not read green. Where a state expects an accessible
+  // opt-out it is a failure; with no state targeting it is a note.
+  const realCmps = r.cmps.filter(c => c.name !== 'Notice-only banner');
+  const cmpState = realCmps.length ? 'pass'
                  : !r.ok ? 'mid'
                  : (r.states || []).length ? 'fail' : 'mid';
   const bannerState = r.banner_visible === true ? 'pass'
