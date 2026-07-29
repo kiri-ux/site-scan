@@ -440,7 +440,34 @@ async function loadAuditByUrl(url, onDone){
   } catch(e){ AUDIT_URL_TRIED.delete(root); }
 }
 
-function containerAuditHtml(r){
+// Container tags are named for the vendor that fingerprinted them, but
+// buyers think in products. Google Ads and Google Analytics are left
+// out deliberately - they belong to several products (YouTube, PPC,
+// PMax / SEO) and the tag alone cannot say which.
+const VENDOR_PRODUCT = {
+  'xAd/GroundTruth': 'Mobile', 'Meta Pixel': 'Meta',
+  'Amazon Ad Tag': 'Amazon', 'LinkedIn Insight': 'LinkedIn',
+  'TikTok Pixel': 'TikTok', 'IDX tag': 'WVID',
+  'Beeswax conversion': 'BARCK+', 'Beeswax segment': 'BARCK+',
+  'Yahoo': 'BARCK+', 'The Trade Desk': 'BARCK+', 'Floodlight': 'BARCK+',
+};
+
+// Vendors actually seen firing across every scanned page - configured
+// and firing are different facts, and the gap between them is the
+// point of reading the container at all.
+function observedVendors(rs){
+  const out = new Set();
+  for (const r of rs || []){
+    for (const k of ['pre_consent', 'post_consent', 'post_reject'])
+      for (const h of (r[k] || [])) if (h.vendor) out.add(h.vendor);
+    for (const p of (r.products || []))
+      for (const px of (p.pixels || []))
+        if (px.fired_pre || px.fired_post) out.add(px.name);
+  }
+  return out;
+}
+
+function containerAuditHtml(r, allResults){
   const byUrl = AUDIT_BY_URL[r.url] || AUDIT_BY_URL[_rootDomain(r.url)];
   // dedupe: a container found on the page can also match by domain
   const ids = [...new Set([...(((r.gtm || {}).container_ids) || []),
@@ -467,16 +494,34 @@ function containerAuditHtml(r){
     }
     const gated = tags.filter(t => t.consent_status === 'NEEDED').length;
     const known = tags.filter(t => t.vendor);
-    const rows = known.map(t => {
-      const cls = t.consent_status === 'NEEDED' ? 'ok' : 'bad';
-      const label = t.consent_status === 'NEEDED'
-        ? `gated: ${(t.consent_types || []).join(', ') || 'consent required'}`
-        : 'not gated';
-      const notes = [];
-      if (t.paused) notes.push('paused');
-      if (!(t.firing_triggers || []).length) notes.push('no firing trigger');
+    // One row per product, not per tag: eleven Mobile tags is a single
+    // fact about the container, and eleven rows buries it.
+    const groups = [];
+    const byLabel = {};
+    for (const t of known){
+      const label = VENDOR_PRODUCT[t.vendor] || t.vendor;
+      if (!byLabel[label]) { byLabel[label] = {label, tags: []}; groups.push(byLabel[label]); }
+      byLabel[label].tags.push(t);
+    }
+    const seen = observedVendors(allResults || [r]);
+    const rows = groups.map(grp => {
+      const n = grp.tags.length;
+      const gatedN = grp.tags.filter(t => t.consent_status === 'NEEDED').length;
+      const cls = gatedN === n ? 'ok' : gatedN ? 'warn' : 'bad';
+      const label = gatedN === n ? 'gated' : gatedN ? `${gatedN}/${n} gated` : 'not gated';
+      const notes = [`${n} tag${n === 1 ? '' : 's'}`];
+      const vendors = [...new Set(grp.tags.map(t => t.vendor))];
+      if (vendors.length > 1 || vendors[0] !== grp.label) notes.push(vendors.join(', '));
+      const noTrigger = grp.tags.filter(t => !(t.firing_triggers || []).length).length;
+      if (noTrigger) notes.push(`${noTrigger} with no firing trigger`);
+      const paused = grp.tags.filter(t => t.paused).length;
+      if (paused) notes.push(`${paused} paused`);
+      // Configured but never observed: it may fire on a page that was
+      // not scanned, or on a click - the scan only sees page load.
+      const fired = grp.tags.some(t => seen.has(t.vendor));
+      if (!fired) notes.push('not seen firing on the scanned pages');
       return `<li><span class="badge ${cls}">${label}</span>
-        <div><b>${t.vendor}</b> <span class="evidence">${t.name}${t.vendor_from === 'content' ? ' &middot; identified from the tag code' : ''}${notes.length ? ' &middot; ' + notes.join(', ') : ''}</span></div></li>`;
+        <div><b>${grp.label}</b> <span class="evidence">${notes.join(' &middot; ')}</span></div></li>`;
     }).join('');
     // Tags with no vendor fingerprint are usually UI scripts, not
     // trackers - counted, not listed, so they don't read as findings.
