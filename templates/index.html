@@ -945,6 +945,33 @@ function groupRuns(){
 
 
 
+// --- recency -------------------------------------------------------
+// Three stamps can be present depending on where the result came from:
+// scanned_at_iso (DB, real ISO), scanned_at (scanner, "YYYY-MM-DD HH:MM
+// UTC") and scanned_local (browser locale string, session results only).
+// Take the first that parses so DB history and this session's scans sort
+// against each other on one scale.
+function resultTime(r){
+  if (!r) return 0;
+  const tries = [
+    r.scanned_at_iso,
+    r.scanned_at ? String(r.scanned_at).replace(' ', 'T').replace(' UTC', 'Z') : null,
+    r.scanned_local,
+  ];
+  for (const s of tries){
+    if (!s) continue;
+    const t = Date.parse(s);
+    if (!isNaN(t)) return t;
+  }
+  return 0;
+}
+function runTime(g){
+  return Math.max(0, ...g.items.map(x => resultTime(x.r)));
+}
+function clientTime(cg){
+  return Math.max(0, ...cg.runs.map(runTime));
+}
+
 const selectedVersion = {}; // clientKey -> run key chosen in the picker
 function clientGroups(){
   const by = {};
@@ -952,8 +979,11 @@ function clientGroups(){
     const ck = (g.name || mainItem(g).r.url || '').toLowerCase().trim() || g.key;
     (by[ck] = by[ck] || {ck, runs: []}).runs.push(g);
   }
-  // groupRuns returns newest-first order; keep that per client
-  return Object.values(by);
+  // newest run first within each client, so runs[0] is current and the
+  // version pills read most-recent to oldest left to right
+  const out = Object.values(by);
+  out.forEach(cg => cg.runs.sort((a, b) => runTime(b) - runTime(a)));
+  return out;
 }
 function pickVersion(ck, key){
   selectedVersion[ck] = key;
@@ -1034,9 +1064,10 @@ function toggleUrls(){
 }
 
 // --- severity, sorting and filtering -------------------------------
-// Worst first, so the top of the page is what needs attention. Severity
-// is judged on each client's NEWEST run - an old clean scan shouldn't
-// bury a current problem.
+// Most recent first, so the top of the page is what was just scanned.
+// Severity still breaks ties and drives the filter chips, and is judged
+// on each client's NEWEST run - an old clean scan shouldn't hide a
+// current problem.
 const SEV_LABEL = ['inconclusive', 'pre-consent fires', 'pixels missing', 'ungated', 'clean'];
 const SEV_CLS   = ['warn', 'bad', 'bad', 'warn', 'ok'];
 
@@ -1066,7 +1097,9 @@ function clientLabel(cg){
 }
 function sortedClients(){
   return clientGroups().sort((a, b) =>
-    clientSeverity(a) - clientSeverity(b) || clientLabel(a).localeCompare(clientLabel(b)));
+    clientTime(b) - clientTime(a)
+    || clientSeverity(a) - clientSeverity(b)
+    || clientLabel(a).localeCompare(clientLabel(b)));
 }
 function visibleClients(all){
   return all.filter(cg =>
