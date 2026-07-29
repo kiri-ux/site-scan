@@ -124,8 +124,15 @@ function cmBlock(r){
     : r.implementation === 'Client placement'
     ? ` <span class="ob ob-ext">CLIENT OWNED</span>` : '';
   const g = r.gtm || {};
+  // Confirm the container on the page is the one the API read - without
+  // it there is no way to tell a verified container from a guess.
+  const verified = (g.container_ids || [])
+    .map(id => AUDITS[id]).filter(a => a && a.status === 'ok');
+  const vTag = verified.length
+    ? ` <span class="src-tag gtm" data-tip="This container was read through the Tag Manager API - the tag list below is its published configuration, not an inference from the page.">&#10003; ${verified.reduce((n, a) => n + (a.tags || []).length, 0)} tags read via API</span>`
+    : '';
   const gtmBit = (g.container_ids || []).length
-    ? `<span class="kv">GTM: <b>${g.container_ids.join(', ')}</b>${own}</span>`
+    ? `<span class="kv">GTM: <b>${g.container_ids.join(', ')}</b>${own}${vTag}</span>`
     : g.found
     ? `<span class="kv">GTM: <b>container present, ID not detected</b>${own}</span>`
     : g.gtag_only
@@ -635,7 +642,7 @@ function renderSite(r, i, site){
   else if (!site && mineDef)
     kvBits.push(`<span class="kv"${tipAttr('defaults')}>Defaults: <b>${mineDef}</b></span>`);
 
-  const cmpDetail = containerAuditHtml(r) + cmpDiffHtml(r, site && (site.cmps || []).map(c => c.name));
+  const cmpDetail = cmpDiffHtml(r, site && (site.cmps || []).map(c => c.name));
 
   const preViol = (r.pre_consent || []).filter(h => h.severity === 'violation').length;
   // group hits that belong to a selected product under the product name

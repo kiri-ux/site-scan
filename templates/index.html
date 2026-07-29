@@ -1018,7 +1018,7 @@ function renderGroup(g, cg, verBar){
     </div>
     <div class="rg-body">
       ${verBar}
-      <div class="rg-summary">${chainFor(mainItem(g).r, {states: false})}<div class="detail">${cmBlock(mainItem(g).r)}${cmpEvidenceHtml(mainItem(g).r)}${stateChecksHtml(siteCheckResult(g.items.map(x => x.r), mainItem(g).r))}${(() => {
+      <div class="rg-summary">${chainFor(mainItem(g).r, {states: false})}<div class="detail">${cmBlock(mainItem(g).r)}${containerAuditHtml(mainItem(g).r)}${cmpEvidenceHtml(mainItem(g).r)}${stateChecksHtml(siteCheckResult(g.items.map(x => x.r), mainItem(g).r))}${(() => {
         let impl = g.items.map(x => x.r.implementation).find(Boolean);
         if (!impl) { const mu = normUrl(mainItem(g).r.url); const s = (schedSites || []).find(x => normUrl(x.url) === mu); impl = s && s.implementation || ''; }
         return actionItemsHtml(g.items.map(x => x.r), impl);

@@ -188,7 +188,7 @@ function draw(){
     items.map(x => x.r).filter(r => !(((r.gtm || {}).container_ids) || []).length)
          .forEach(r => loadAuditByUrl(r.url, draw));
   $('pages').innerHTML =
-    `<div class="site open"><div class="site-body">${chainFor(main.r, {states: false})}<div class="detail">${cmBlock(main.r)}${cmpEvidenceHtml(main.r)}${stateChecksHtml(siteCheckResult(items.map(x => x.r), main.r))}${actionItemsHtml(items.map(i => i.r), main.r.implementation || '')}</div></div></div>`
+    `<div class="site open"><div class="site-body">${chainFor(main.r, {states: false})}<div class="detail">${cmBlock(main.r)}${containerAuditHtml(main.r)}${cmpEvidenceHtml(main.r)}${stateChecksHtml(siteCheckResult(items.map(x => x.r), main.r))}${actionItemsHtml(items.map(i => i.r), main.r.implementation || '')}</div></div></div>`
     + items.map(({r, i}) => renderSite(r, i, main.r)).join('');
 }
 
