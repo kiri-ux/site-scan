@@ -218,10 +218,36 @@ def _identify(tag, content):
     return None, None
 
 
+def _trigger_filters(trig):
+    """A trigger's conditions, flattened. GTM expresses a condition as an
+    operator plus arg0 (the variable) and arg1 (the value); negation
+    rides along as a parameter rather than a separate operator."""
+    out = []
+    for group in ("filter", "autoEventFilter", "customEventFilter"):
+        for f in (trig.get(group) or []):
+            params = {p.get("key"): p.get("value")
+                      for p in (f.get("parameter") or [])}
+            out.append({
+                "op": f.get("type", ""),
+                "var": params.get("arg0", ""),
+                "value": params.get("arg1", ""),
+                "negate": str(params.get("negate", "")).lower() == "true"
+                          or bool(f.get("negate")),
+            })
+    return out
+
+
 def _summarize(version):
     """The parts of a live container version worth reporting."""
     triggers = {t.get("triggerId"): t.get("name", "")
                 for t in version.get("trigger", [])}
+    # Full definitions, not just names: the type says whether a tag can
+    # fire on a page load at all, and the filters say on which pages.
+    trig_detail = {t.get("triggerId"): {
+        "name": t.get("name", ""),
+        "type": (t.get("type") or "").upper(),
+        "filters": _trigger_filters(t),
+    } for t in version.get("trigger", [])}
     tags = []
     for t in version.get("tag", []):
         consent = t.get("consentSettings") or {}
@@ -240,6 +266,8 @@ def _summarize(version):
                               if p.get("value")],
             "firing_triggers": [triggers.get(i, i)
                                 for i in (t.get("firingTriggerId") or [])],
+            "trigger_detail": [trig_detail[i] for i in
+                               (t.get("firingTriggerId") or []) if i in trig_detail],
             "blocking_triggers": [triggers.get(i, i)
                                   for i in (t.get("blockingTriggerId") or [])],
         })

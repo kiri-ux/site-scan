@@ -467,6 +467,79 @@ function observedVendors(rs){
   return out;
 }
 
+// --- trigger evaluation ----------------------------------------------
+// A tag that never fires on page load is not a finding when a page-load
+// scan does not see it. Trigger type says whether it could fire at all;
+// URL conditions say on which pages. Anything that depends on the
+// dataLayer, a cookie or custom JS is reported as undeterminable rather
+// than guessed at.
+const LOAD_TRIGGERS = new Set(['PAGEVIEW', 'DOM_READY', 'WINDOW_LOADED',
+  'INIT', 'CONSENT_INIT', 'ALWAYS', 'SERVER_PAGEVIEW']);
+
+function _urlVar(name, url){
+  let u;
+  try { u = new URL(url); } catch(e){ return null; }
+  const k = (name || '').replace(/[{}]/g, '').trim().toLowerCase();
+  if (k === 'page url' || k === 'url') return u.href;
+  if (k === 'page path') return u.pathname;
+  if (k === 'page hostname') return u.hostname;
+  if (k === 'page query') return u.search.replace(/^\?/, '');
+  if (k === 'referrer') return null;   // unknowable from a direct load
+  return null;                          // dataLayer, cookie, custom JS
+}
+
+function _evalFilter(f, url){
+  const left = _urlVar(f.var, url);
+  if (left === null) return null;
+  const right = f.value == null ? '' : String(f.value);
+  let res;
+  switch ((f.op || '').toUpperCase()){
+    case 'EQUALS':      res = left === right; break;
+    case 'CONTAINS':    res = left.indexOf(right) !== -1; break;
+    case 'STARTS_WITH': res = left.startsWith(right); break;
+    case 'ENDS_WITH':   res = left.endsWith(right); break;
+    case 'MATCH_REGEX':
+      try { res = new RegExp(right).test(left); } catch(e){ return null; }
+      break;
+    default: return null;
+  }
+  return f.negate ? !res : res;
+}
+
+// 'yes' | 'no' | 'interaction' | 'unknown' - conditions are ANDed
+function triggerFiresOn(trig, url){
+  if (!LOAD_TRIGGERS.has(trig.type || '')) return 'interaction';
+  const filters = trig.filters || [];
+  if (!filters.length) return 'yes';
+  let unknown = false;
+  for (const f of filters){
+    const r = _evalFilter(f, url);
+    if (r === null) { unknown = true; continue; }
+    if (r === false) return 'no';
+  }
+  return unknown ? 'unknown' : 'yes';
+}
+
+// How a tag relates to the pages that were actually scanned.
+function tagExpectation(tag, urls){
+  const trigs = tag.trigger_detail || [];
+  // An audit cached before trigger detail was captured has names but no
+  // definitions. That is not the same as having no trigger, so say so
+  // rather than reporting the tag as dead.
+  if (!trigs.length)
+    return (tag.firing_triggers || []).length ? 'stale-audit' : 'no-trigger';
+  let best = 'interaction';
+  for (const t of trigs){
+    for (const u of urls){
+      const r = triggerFiresOn(t, u);
+      if (r === 'yes') return 'expected';
+      if (r === 'unknown') best = 'unknown';
+      else if (r === 'no' && best === 'interaction') best = 'other-pages';
+    }
+  }
+  return best;
+}
+
 function containerAuditHtml(r, allResults){
   const byUrl = AUDIT_BY_URL[r.url] || AUDIT_BY_URL[_rootDomain(r.url)];
   // dedupe: a container found on the page can also match by domain
@@ -504,6 +577,7 @@ function containerAuditHtml(r, allResults){
       byLabel[label].tags.push(t);
     }
     const seen = observedVendors(allResults || [r]);
+    const urls = (allResults || [r]).map(x => x.url).filter(Boolean);
     const rows = groups.map(grp => {
       const n = grp.tags.length;
       const gatedN = grp.tags.filter(t => t.consent_status === 'NEEDED').length;
@@ -512,21 +586,33 @@ function containerAuditHtml(r, allResults){
       const notes = [`${n} tag${n === 1 ? '' : 's'}`];
       const vendors = [...new Set(grp.tags.map(t => t.vendor))];
       if (vendors.length > 1 || vendors[0] !== grp.label) notes.push(vendors.join(', '));
-      const noTrigger = grp.tags.filter(t => !(t.firing_triggers || []).length).length;
-      if (noTrigger) notes.push(`${noTrigger} with no firing trigger`);
       const paused = grp.tags.filter(t => t.paused).length;
       if (paused) notes.push(`${paused} paused`);
-      // Configured but never observed: it may fire on a page that was
-      // not scanned, or on a click - the scan only sees page load.
       const fired = grp.tags.some(t => seen.has(t.vendor));
-      if (!fired) notes.push('not seen firing on the scanned pages');
+      // Split the tags by what a page-load scan could have seen, so a
+      // click-triggered tag is not reported as missing.
+      const by = {};
+      grp.tags.forEach(t => { const k = tagExpectation(t, urls); by[k] = (by[k] || 0) + 1; });
+      if (by['expected'])
+        notes.push(`<b>${by['expected']} expected on the scanned pages</b> - ${fired ? 'confirmed firing' : '<b>not seen firing</b>'}`);
+      if (by['interaction']) notes.push(`${by['interaction']} ${by['interaction'] === 1 ? 'fires' : 'fire'} on interaction, which a page-load scan cannot check`);
+      if (by['other-pages']) notes.push(`${by['other-pages']} ${by['other-pages'] === 1 ? 'targets' : 'target'} pages that were not scanned`);
+      if (by['unknown']) notes.push(`${by['unknown']} ${by['unknown'] === 1 ? 'depends' : 'depend'} on conditions that cannot be checked from outside`);
+      if (by['no-trigger']) notes.push(`${by['no-trigger']} with no firing trigger`);
+      if (by['stale-audit']) notes.push(`${by['stale-audit']} not yet re-read since trigger detail was added`);
       // Per-tag detail behind a toggle: the trigger name is what tells a
       // buyer whether a tag fires on load or on a click, which is the
       // difference between "not firing" and "not firing yet".
       const detail = grp.tags.map(t => {
         const trig = (t.firing_triggers || []).length
           ? t.firing_triggers.join(', ') : 'no firing trigger';
-        return `<li>${t.name} <span class="evidence">&mdash; ${trig}${t.paused ? ' &middot; paused' : ''}${t.consent_status === 'NEEDED' ? ` &middot; gated: ${(t.consent_types || []).join(', ')}` : ''}</span></li>`;
+        const exp = {expected: 'should fire on a scanned page',
+                     interaction: 'fires on interaction',
+                     'other-pages': 'targets other pages',
+                     unknown: 'conditions cannot be checked',
+                     'no-trigger': 'never fires',
+                     'stale-audit': 'trigger not yet re-read'}[tagExpectation(t, urls)];
+        return `<li>${t.name} <span class="evidence">&mdash; ${trig} &middot; ${exp}${t.paused ? ' &middot; paused' : ''}${t.consent_status === 'NEEDED' ? ` &middot; gated: ${(t.consent_types || []).join(', ')}` : ''}</span></li>`;
       }).join('');
       return `<li><span class="badge ${cls}">${label}</span>
         <div><b>${grp.label}</b> <span class="evidence">${notes.join(' &middot; ')}</span>
