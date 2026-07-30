@@ -713,10 +713,22 @@ function containerAuditHtml(r, allResults){
     const scopeNote = nonGoogle.length
       ? `<p class="kv evidence">Consent Mode covers Google tags only. The other ${nonGoogle.length} tag${nonGoogle.length === 1 ? '' : 's'} ${nonGoogle.length === 1 ? 'has' : 'have'} to be gated by a per-tag consent check in GTM &mdash; <b>${nonGoogleGated ? `${nonGoogleGated} of ${nonGoogle.length} ${nonGoogleGated === 1 ? 'does' : 'do'}` : 'none do'}</b>.</p>`
       : '';
+    // The denied/granted values themselves live in the page and need a
+    // successful load. What the container can answer on its own is
+    // whether anything is installed to set them at all - a tag on the
+    // Consent Initialization trigger - so a blocked scan is not
+    // completely silent on Consent Mode.
+    const initTags = tags.filter(t => (t.trigger_detail || [])
+      .some(tr => _norm(tr.type) === 'CONSENTINIT'));
+    const initNote = Object.keys(r.consent_defaults || {}).length ? ''
+      : initTags.length
+      ? `<p class="kv evidence">&#10003; <b>${initTags.length} tag${initTags.length === 1 ? '' : 's'} fire${initTags.length === 1 ? 's' : ''} on Consent Initialization</b> (${initTags.slice(0, 3).map(t => t.name).join(', ')}), so this container does set Consent Mode defaults. Whether they are set to <b>denied</b> is in the page, which this scan could not read.</p>`
+      : `<p class="kv evidence">&#9888; <b>No tag fires on Consent Initialization</b>, so nothing in this container sets Consent Mode defaults. That is only half the picture &mdash; a CMP plugin can set them directly in the page, outside GTM, which is common on WordPress. A successful scan is needed to confirm.</p>`;
     return `<h3>Container configuration${a._age_days > 1 ? ` <span class="evidence">(read ${Math.round(a._age_days)} days ago)</span>` : ''}</h3>
-      ${viaDomain ? `<div class="cm-note ok">The page could not be loaded, but its GTM container was found by name and read directly. Nothing below is observed behaviour - it is how the container is configured.</div>` : ''}
+      ${viaDomain ? `<div class="cm-note ok">Our scan was blocked, so nothing below is observed behaviour. The site's GTM container was found by name and read directly through the Tag Manager API &mdash; this is how it is configured, not what it did.</div>` : ''}
       <p class="kv">${a.public_id} &middot; <b>${tags.length}</b> tag${tags.length === 1 ? '' : 's'}, <b>${gated}</b> with consent checks configured${other ? ` &middot; ${other} with no vendor fingerprint (usually UI scripts, not trackers)` : ''}</p>
       ${scopeNote}
+      ${initNote}
       ${rows ? `<ul>${rows}</ul>` : ''}`;
   }).join('');
 }
@@ -870,9 +882,17 @@ function chainFor(r, opts){
 // observed firing on it. The container summary says what exists; this
 // says what should have happened on the page in front of you.
 function pageTagsHtml(r){
-  const ids = (((r.gtm || {}).container_ids) || []);
+  // Which of the container's tags target THIS url. That comes from the
+  // Tag Manager API, not from the page, so it survives a blocked scan.
+  // What does not survive is any claim about whether they fired.
+  const named = AUDIT_BY_URL[r.url] || AUDIT_BY_URL[_rootDomain(r.url)];
+  const ids = [...new Set([...(((r.gtm || {}).container_ids) || []),
+                           ...(named ? [named] : [])])];
   const audits = ids.map(id => AUDITS[id]).filter(a => a && a.status === 'ok');
-  if (!audits.length || r.inconclusive || r.pending) return '';
+  if (!audits.length || r.pending) return '';
+  const usable = !r.inconclusive;
+  const blockedNote = usable ? ''
+    : `<p class="kv evidence">Our scan was blocked, so this is what the container is <b>configured</b> to do on this page &mdash; not what happened.</p>`;
   const seen = observedVendors([r]);
   const groups = [];
   const byLabel = {};
@@ -900,18 +920,21 @@ function pageTagsHtml(r){
     if (by['unknown']) parts.push(`${by['unknown']} depend${s(by['unknown'])} on values the scan cannot read`);
     if (by['no-trigger']) parts.push(`${by['no-trigger']} ha${by['no-trigger'] === 1 ? 's' : 've'} no firing trigger`);
     if (by['stale-audit']) parts.push(`${by['stale-audit']} not yet re-read`);
-    return `<h3>Container tags set to fire on this page</h3>
+    return `<h3>Container tags set to fire on this page</h3>${blockedNote}
       <p class="kv"><b>None.</b> Of the ${all.length} vendor tag${all.length === 1 ? '' : 's'} in the container${parts.length ? `, ${parts.join(', ')}` : ''}. Nothing here is missing - the container simply does not target this page.</p>`;
   }
   const rows = groups.map(g => {
     const n = g.tags.length;
     const list = g.tags.map(t =>
       `<li>${t.name} <span class="evidence">&mdash; ${(t.firing_triggers || []).join(', ') || 'no trigger'} &middot; <b>${tagKind(t)}</b></span></li>`).join('');
-    return `<li><span class="badge ${g.fired ? 'ok' : 'bad'}">${g.fired ? 'firing' : 'not seen firing'}</span>
+    const badge = !usable ? `<span class="badge neutral">not tested</span>`
+      : g.fired ? `<span class="badge ok">firing</span>`
+      : `<span class="badge bad">not seen firing</span>`;
+    return `<li>${badge}
       <div><b>${g.label}</b> <span class="evidence">${n} tag${n === 1 ? '' : 's'} set to fire on this page</span>
       <ol style="margin:4px 0 0 18px;padding:0;font-size:12.5px">${list}</ol></div></li>`;
   }).join('');
-  return `<h3>Container tags set to fire on this page</h3><ul>${rows}</ul>`;
+  return `<h3>Container tags set to fire on this page</h3>${blockedNote}<ul>${rows}</ul>`;
 }
 
 function renderSite(r, i, site){
