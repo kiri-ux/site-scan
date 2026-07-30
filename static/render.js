@@ -479,8 +479,39 @@ function observedVendors(rs){
 // URL conditions say on which pages. Anything that depends on the
 // dataLayer, a cookie or custom JS is reported as undeterminable rather
 // than guessed at.
-const LOAD_TRIGGERS = new Set(['PAGEVIEW', 'DOM_READY', 'WINDOW_LOADED',
-  'INIT', 'CONSENT_INIT', 'ALWAYS', 'SERVER_PAGEVIEW']);
+//
+// GTM's API returns these enums in camelCase ("domReady", "startsWith").
+// Strip separators before comparing so both that and any snake-case
+// value in an older cached audit land on the same key.
+function _norm(s){ return String(s || '').replace(/[_\s-]/g, '').toUpperCase(); }
+
+const LOAD_TRIGGERS = new Set(['PAGEVIEW', 'DOMREADY', 'WINDOWLOADED',
+  'INIT', 'CONSENTINIT', 'ALWAYS', 'SERVERPAGEVIEW']);
+
+// What a buyer would call each trigger type.
+const TRIGGER_LABEL = {
+  PAGEVIEW:'page view', DOMREADY:'page view', WINDOWLOADED:'page view',
+  SERVERPAGEVIEW:'page view', INIT:'initialization',
+  CONSENTINIT:'initialization', ALWAYS:'every page',
+  CLICK:'click', LINKCLICK:'click', FORMSUBMISSION:'form submit',
+  ELEMENTVISIBILITY:'element visible', SCROLLDEPTH:'scroll',
+  TIMER:'timer', HISTORYCHANGE:'history change',
+  CUSTOMEVENT:'custom event', YOUTUBEVIDEO:'video', JSERROR:'JS error',
+};
+function triggerLabel(trig){
+  const k = _norm(trig && trig.type);
+  return TRIGGER_LABEL[k] || (k ? k.toLowerCase() : 'unknown trigger');
+}
+
+// One label per tag, so the counts add up to the tag count. A tag wired
+// to both a page view and a click is reported by the page view - that is
+// the one a page-load scan can say anything about.
+function tagKind(t){
+  const trigs = t.trigger_detail || [];
+  if (!trigs.length)
+    return (t.firing_triggers || []).length ? 'trigger not re-read' : 'no trigger';
+  return triggerLabel(trigs.find(tr => LOAD_TRIGGERS.has(_norm(tr.type))) || trigs[0]);
+}
 
 function _urlVar(name, url){
   let u;
@@ -499,12 +530,12 @@ function _evalFilter(f, url){
   if (left === null) return null;
   const right = f.value == null ? '' : String(f.value);
   let res;
-  switch ((f.op || '').toUpperCase()){
-    case 'EQUALS':      res = left === right; break;
-    case 'CONTAINS':    res = left.indexOf(right) !== -1; break;
-    case 'STARTS_WITH': res = left.startsWith(right); break;
-    case 'ENDS_WITH':   res = left.endsWith(right); break;
-    case 'MATCH_REGEX':
+  switch (_norm(f.op)){
+    case 'EQUALS':     res = left === right; break;
+    case 'CONTAINS':   res = left.indexOf(right) !== -1; break;
+    case 'STARTSWITH': res = left.startsWith(right); break;
+    case 'ENDSWITH':   res = left.endsWith(right); break;
+    case 'MATCHREGEX':
       try { res = new RegExp(right).test(left); } catch(e){ return null; }
       break;
     default: return null;
@@ -512,9 +543,19 @@ function _evalFilter(f, url){
   return f.negate ? !res : res;
 }
 
+// The variables a trigger needs that cannot be read from a URL alone -
+// dataLayer values, cookies, lookup tables, custom JS, the referrer.
+// Naming them beats saying "conditions cannot be checked".
+function unresolvedVars(trig, url){
+  return [...new Set((trig.filters || [])
+    .filter(f => _urlVar(f.var, url) === null)
+    .map(f => String(f.var || '').trim())
+    .filter(Boolean))];
+}
+
 // 'yes' | 'no' | 'interaction' | 'unknown' - conditions are ANDed
 function triggerFiresOn(trig, url){
-  if (!LOAD_TRIGGERS.has(trig.type || '')) return 'interaction';
+  if (!LOAD_TRIGGERS.has(_norm(trig.type))) return 'interaction';
   const filters = trig.filters || [];
   if (!filters.length) return 'yes';
   let unknown = false;
@@ -598,15 +639,27 @@ function containerAuditHtml(r, allResults){
       const paused = grp.tags.filter(t => t.paused).length;
       if (paused) notes.push(`${paused} paused`);
       const fired = grp.tags.some(t => seen.has(t.vendor));
+      // Lead with the trigger mix - "6 click, 2 page view" is the shape
+      // of the container, and it explains the expectation counts that
+      // follow without spelling each one out.
+      const kinds = {};
+      grp.tags.forEach(t => { const k = tagKind(t); kinds[k] = (kinds[k] || 0) + 1; });
+      Object.entries(kinds).sort((a, b) => b[1] - a[1])
+        .forEach(([k, c]) => notes.push(`<b>${c}</b> ${k}`));
       // Split the tags by what a page-load scan could have seen, so a
       // click-triggered tag is not reported as missing.
       const by = {};
       grp.tags.forEach(t => { const k = tagExpectation(t, urls); by[k] = (by[k] || 0) + 1; });
       if (by['expected'])
         notes.push(`<b>${by['expected']} expected on the scanned pages</b> - ${fired ? 'confirmed firing' : '<b>not seen firing</b>'}`);
-      if (by['interaction']) notes.push(`${by['interaction']} ${by['interaction'] === 1 ? 'fires' : 'fire'} on interaction, which a page-load scan cannot check`);
       if (by['other-pages']) notes.push(`${by['other-pages']} ${by['other-pages'] === 1 ? 'targets' : 'target'} pages that were not scanned`);
-      if (by['unknown']) notes.push(`${by['unknown']} ${by['unknown'] === 1 ? 'depends' : 'depend'} on conditions that cannot be checked from outside`);
+      if (by['unknown']){
+        // Name the variables rather than saying "conditions" - the buyer
+        // can look them up in the container.
+        const vars = [...new Set(grp.tags.flatMap(t =>
+          (t.trigger_detail || []).flatMap(tr => unresolvedVars(tr, urls[0] || ''))))];
+        notes.push(`${by['unknown']} need${by['unknown'] === 1 ? 's' : ''} ${vars.length ? vars.slice(0, 3).join(', ') + (vars.length > 3 ? ', ...' : '') : 'values'}, which the scan cannot read`);
+      }
       if (by['no-trigger']) notes.push(`${by['no-trigger']} with no firing trigger`);
       if (by['stale-audit']) notes.push(`${by['stale-audit']} not yet re-read since trigger detail was added`);
       // Per-tag detail behind a toggle: the trigger name is what tells a
@@ -615,13 +668,17 @@ function containerAuditHtml(r, allResults){
       const detail = grp.tags.map(t => {
         const trig = (t.firing_triggers || []).length
           ? t.firing_triggers.join(', ') : 'no firing trigger';
+        const kind = tagKind(t);
+        const state = tagExpectation(t, urls);
+        const vars = [...new Set((t.trigger_detail || [])
+          .flatMap(tr => unresolvedVars(tr, urls[0] || '')))];
         const exp = {expected: 'should fire on a scanned page',
-                     interaction: 'fires on interaction',
+                     interaction: '',
                      'other-pages': 'targets other pages',
-                     unknown: 'conditions cannot be checked',
+                     unknown: vars.length ? `needs ${vars.slice(0, 2).join(', ')}` : 'conditions cannot be checked',
                      'no-trigger': 'never fires',
-                     'stale-audit': 'trigger not yet re-read'}[tagExpectation(t, urls)];
-        return `<li>${t.name} <span class="evidence">&mdash; ${trig} &middot; ${exp}${t.paused ? ' &middot; paused' : ''}${t.consent_status === 'NEEDED' ? ` &middot; gated: ${(t.consent_types || []).join(', ')}` : ''}</span></li>`;
+                     'stale-audit': 'trigger not yet re-read'}[state];
+        return `<li>${t.name} <span class="evidence">&mdash; ${trig} &middot; <b>${kind}</b>${exp ? ` &middot; ${exp}` : ''}${t.paused ? ' &middot; paused' : ''}${t.consent_status === 'NEEDED' ? ` &middot; gated: ${(t.consent_types || []).join(', ')}` : ''}</span></li>`;
       }).join('');
       return `<li><span class="badge ${cls}">${label}</span>
         <div><b>${grp.label}</b> <span class="evidence">${notes.join(' &middot; ')}</span>
