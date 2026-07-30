@@ -87,10 +87,24 @@ function nonGoogleProds(r){
     .some(px => GOOGLE_PIXELS.includes(px.name))).map(p => p.product).join(', ');
 }
 
+// The Consent Mode signals that are actually granted or denied. A
+// consent default call also carries configuration parameters - region,
+// wait_for_update - which are neither. Reading those as "granted" turns
+// a correctly configured site into an INCORRECT SETUP stamp.
+const CM_STORAGE = new Set(['ad_storage', 'analytics_storage', 'ad_user_data',
+  'ad_personalization', 'functionality_storage', 'personalization_storage',
+  'security_storage']);
+
+// Vendors Consent Mode governs natively. Everything else has to be
+// gated by a per-tag consent check in GTM instead.
+const GOOGLE_VENDORS = new Set(['Google Ads', 'Google tag', 'Google Analytics 4',
+  'GA4', 'Google Tag Manager', 'Floodlight']);
+
 function cmBlock(r){
   // Consent Mode verdict - site-level, rendered once in the client
   // summary rather than per page
-  const defaults = Object.entries(r.consent_defaults || {}).sort();
+  const defaults = Object.entries(r.consent_defaults || {})
+    .filter(([k]) => CM_STORAGE.has(k)).sort();
   let stamp = '', note = '';
   if (defaults.length) {
     const granted = defaults.filter(([k, v]) => v !== 'denied').map(([k]) => k);
@@ -109,13 +123,13 @@ function cmBlock(r){
       ? `<span class="cm-stamp bad"${tipAttr('defaults')}>&#10007; BLOCKED - NO CONSENT PATH</span>`
       : `<span class="cm-stamp ok"${tipAttr('defaults')}>&#10003; CORRECT SETUP</span>`;
     note = granted.length
-      ? `<div class="cm-note warn">&#9888; <b>${granted.join(', ')}</b> ${granted.length > 1 ? 'are' : 'is'} granted by default - Google tags can track before the visitor consents. The target setup starts every storage type <b>denied</b> and flips to granted on Accept (this is what the GTM consent procedure installs).</div>`
+      ? `<div class="cm-note warn">&#9888; <b>${granted.join(', ')}</b> ${granted.length > 1 ? 'start' : 'starts'} granted, so Google tags can track before consent. <b>Fix:</b> set every storage type to <b>denied</b> by default and let the banner flip them on Accept.</div>`
       : noPath
-      ? `<div class="cm-note warn">&#9888; <b>Every storage type starts denied and ${noticeOnly ? 'the notice-only bar cannot grant it' : 'there is no consent banner to grant it'}.</b> ${noticeOnly ? 'A notice-only bar dismisses itself and sets a cookie - it does not send a consent update - so nothing ever flips these to granted. ' : ''}Google tags${googleProds(r) ? ` on this client (${googleProds(r)})` : ''} run without ad or analytics storage indefinitely: no conversion attribution, no remarketing audiences, GA4 reduced to modelled data.${nonGoogleProds(r) ? ` Non-Google pixels (${nonGoogleProds(r)}) are unaffected and keep firing normally.` : ''} Fix by installing a consent banner that sends a consent update, or by reverting the defaults until one is in place.</div>`
-      : `<div class="cm-note ok">&#10003; Correct setup: every storage type starts <b>denied</b>, so Google tags run cookieless until the visitor accepts - exactly the Consent Mode configuration the GTM consent procedure installs. No consent work needed here.</div>`;
+      ? `<div class="cm-note warn">&#9888; <b>Every storage type starts denied and ${noticeOnly ? 'the notice-only bar cannot grant it' : 'there is no banner to grant it'}.</b> ${noticeOnly ? 'A notice-only bar sets a cookie and dismisses itself - it sends no consent update. ' : ''}Google tags${googleProds(r) ? ` (${googleProds(r)})` : ''} stay dark indefinitely: no conversion attribution, no remarketing, GA4 modelled only.${nonGoogleProds(r) ? ` Non-Google pixels (${nonGoogleProds(r)}) keep firing normally.` : ''} <b>Fix:</b> install a banner that sends a consent update, or revert the defaults until one is in place.</div>`
+      : `<div class="cm-note ok">&#10003; Every storage type starts <b>denied</b> and a CMP is present to grant it. No Consent Mode work needed.</div>`;
   } else if (r.gtm && r.gtm.found && (r.cmps||[]).length) {
     stamp = `<span class="cm-stamp bad">&#10007; NOT CONFIGURED</span>`;
-    note = `<div class="cm-note warn">&#9888; No Consent Mode defaults detected in the GTM/gtag setup - Google tags likely run at full capability before consent even though a CMP is present. The GTM consent procedure installs denied-by-default settings.</div>`;
+    note = `<div class="cm-note warn">&#9888; A CMP is present but no Consent Mode defaults were found, so Google tags run at full capability before consent. <b>Fix:</b> install denied-by-default settings.</div>`;
   }
   // Ownership is a client-level fact, so it rides the summary GTM line
   // rather than repeating on every page below. The container and owner
@@ -625,6 +639,10 @@ function containerAuditHtml(r, allResults){
     }
     const seen = observedVendors(allResults || [r]);
     const urls = (allResults || [r]).map(x => x.url).filter(Boolean);
+    // "Not seen firing" is only a finding if a page actually loaded. A
+    // positive sighting still counts on a blocked scan - something was
+    // observed - but an absence is the block talking.
+    const usable = (allResults || [r]).some(x => !x.inconclusive && !x.pending);
     const rows = groups.map(grp => {
       const n = grp.tags.length;
       const gatedN = grp.tags.filter(t => t.consent_status === 'NEEDED').length;
@@ -651,17 +669,16 @@ function containerAuditHtml(r, allResults){
       const by = {};
       grp.tags.forEach(t => { const k = tagExpectation(t, urls); by[k] = (by[k] || 0) + 1; });
       if (by['expected'])
-        notes.push(`<b>${by['expected']} expected on the scanned pages</b> - ${fired ? 'confirmed firing' : '<b>not seen firing</b>'}`);
-      if (by['other-pages']) notes.push(`${by['other-pages']} ${by['other-pages'] === 1 ? 'targets' : 'target'} pages that were not scanned`);
+        notes.push(`<b>${by['expected']} should fire here</b> - ${fired ? 'confirmed firing'
+          : usable ? '<b>not seen firing</b>' : 'not tested, the page never loaded'}`);
+      if (by['other-pages']) notes.push(`${by['other-pages']} ${by['other-pages'] === 1 ? 'targets' : 'target'} other pages`);
       if (by['unknown']){
         // Name the variables rather than saying "conditions" - the buyer
         // can look them up in the container.
         const vars = [...new Set(grp.tags.flatMap(t =>
           (t.trigger_detail || []).flatMap(tr => unresolvedVars(tr, urls[0] || ''))))];
-        notes.push(`${by['unknown']} need${by['unknown'] === 1 ? 's' : ''} ${vars.length ? vars.slice(0, 3).join(', ') + (vars.length > 3 ? ', ...' : '') : 'values'}, which the scan cannot read`);
+        notes.push(`${by['unknown']} need${by['unknown'] === 1 ? 's' : ''} ${vars.length ? vars.slice(0, 2).join(', ') : 'values'}, which the scan cannot read`);
       }
-      if (by['no-trigger']) notes.push(`${by['no-trigger']} with no firing trigger`);
-      if (by['stale-audit']) notes.push(`${by['stale-audit']} not yet re-read since trigger detail was added`);
       // Per-tag detail behind a toggle: the trigger name is what tells a
       // buyer whether a tag fires on load or on a click, which is the
       // difference between "not firing" and "not firing yet".
@@ -672,7 +689,7 @@ function containerAuditHtml(r, allResults){
         const state = tagExpectation(t, urls);
         const vars = [...new Set((t.trigger_detail || [])
           .flatMap(tr => unresolvedVars(tr, urls[0] || '')))];
-        const exp = {expected: 'should fire on a scanned page',
+        const exp = {expected: 'fires here',
                      interaction: '',
                      'other-pages': 'targets other pages',
                      unknown: vars.length ? `needs ${vars.slice(0, 2).join(', ')}` : 'conditions cannot be checked',
@@ -682,15 +699,24 @@ function containerAuditHtml(r, allResults){
       }).join('');
       return `<li><span class="badge ${cls}">${label}</span>
         <div><b>${grp.label}</b> <span class="evidence">${notes.join(' &middot; ')}</span>
-        <details class="ai-proc"><summary>${n} tag${n === 1 ? '' : 's'} and their triggers</summary><ol>${detail}</ol></details></div></li>`;
+        <details class="ai-proc"><summary>${n} tag${n === 1 ? '' : 's'} and ${n === 1 ? 'its' : 'their'} triggers</summary><ol>${detail}</ol></details></div></li>`;
     }).join('');
     // Tags with no vendor fingerprint are usually UI scripts, not
     // trackers - counted, not listed, so they don't read as findings.
     const other = tags.length - known.length;
     const viaDomain = byUrl === a.public_id && !(((r.gtm || {}).container_ids) || []).length;
+    // Consent Mode is a Google-only mechanism, so a container full of
+    // non-Google tags needs per-tag consent checks instead. Without this
+    // line the Consent Mode verdict above reads as if it covered them.
+    const nonGoogle = known.filter(t => !GOOGLE_VENDORS.has(t.vendor));
+    const nonGoogleGated = nonGoogle.filter(t => t.consent_status === 'NEEDED').length;
+    const scopeNote = nonGoogle.length
+      ? `<p class="kv evidence">Consent Mode covers Google tags only. The other ${nonGoogle.length} tag${nonGoogle.length === 1 ? '' : 's'} ${nonGoogle.length === 1 ? 'has' : 'have'} to be gated by a per-tag consent check in GTM &mdash; <b>${nonGoogleGated ? `${nonGoogleGated} of ${nonGoogle.length} ${nonGoogleGated === 1 ? 'does' : 'do'}` : 'none do'}</b>.</p>`
+      : '';
     return `<h3>Container configuration${a._age_days > 1 ? ` <span class="evidence">(read ${Math.round(a._age_days)} days ago)</span>` : ''}</h3>
       ${viaDomain ? `<div class="cm-note ok">The page could not be loaded, but its GTM container was found by name and read directly. Nothing below is observed behaviour - it is how the container is configured.</div>` : ''}
       <p class="kv">${a.public_id} &middot; <b>${tags.length}</b> tag${tags.length === 1 ? '' : 's'}, <b>${gated}</b> with consent checks configured${other ? ` &middot; ${other} with no vendor fingerprint (usually UI scripts, not trackers)` : ''}</p>
+      ${scopeNote}
       ${rows ? `<ul>${rows}</ul>` : ''}`;
   }).join('');
 }
