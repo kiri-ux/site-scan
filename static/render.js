@@ -744,7 +744,15 @@ function cmpEvidenceHtml(r){
   // Site-level: which CMP, how it was identified, and its consent
   // trigger event. Rendered once in the client summary.
   if (!(r.cmps || []).length) return '';
-  return `<h3>CMP evidence</h3><ul>` + r.cmps.map(c =>
+  // A positive hit survives a failed scan - something answered to the
+  // signature, so the CMP really is installed. What does not survive is
+  // any reading of absence, or of behaviour. Every other block on an
+  // inconclusive scan suppresses itself; this one states a fact, so it
+  // needs to say how far that fact reaches.
+  const caveat = r.inconclusive
+    ? `<div class="cm-note warn">&#9888; The page never loaded properly, so this is identification only &mdash; it confirms what is installed and nothing more. Whether the banner actually gates anything was not tested, and anything <i>not</i> listed here may simply never have been reached.</div>`
+    : '';
+  return `<h3>CMP evidence</h3>${caveat}<ul>` + r.cmps.map(c =>
     `<li><div><b>${c.name}</b> <span class="evidence"${tipAttr('cmp-evidence')}>${(c.evidence||[]).join(' &middot; ')}</span>
       ${c.notes ? `<div class="evidence">${c.notes}</div>` : ''}
       ${c.gtm_event ? `<div class="evidence">Consent trigger event: <span class="pill">${c.gtm_event}</span></div>` : ''}</div></li>`).join('') + `</ul>`;
@@ -838,24 +846,41 @@ function chainFor(r, opts){
 function pageTagsHtml(r){
   const ids = (((r.gtm || {}).container_ids) || []);
   const audits = ids.map(id => AUDITS[id]).filter(a => a && a.status === 'ok');
-  if (!audits.length || r.inconclusive) return '';
+  if (!audits.length || r.inconclusive || r.pending) return '';
   const seen = observedVendors([r]);
   const groups = [];
   const byLabel = {};
+  const all = [];
   for (const a of audits)
     for (const t of (a.tags || [])){
       if (!t.vendor) continue;
+      all.push(t);
       if (tagExpectation(t, [r.url]) !== 'expected') continue;
       const label = VENDOR_PRODUCT[t.vendor] || t.vendor;
       if (!byLabel[label]) { byLabel[label] = {label, tags: [], fired: false}; groups.push(byLabel[label]); }
       byLabel[label].tags.push(t);
       if (seen.has(t.vendor)) byLabel[label].fired = true;
     }
-  if (!groups.length) return '';
+  // Rendering nothing here reads as "not built" rather than "nothing to
+  // report" - and the two look identical. Say which, and why.
+  if (!groups.length){
+    if (!all.length) return '';
+    const by = {};
+    all.forEach(t => { const k = tagExpectation(t, [r.url]); by[k] = (by[k] || 0) + 1; });
+    const parts = [];
+    const s = n => n === 1 ? 's' : '';
+    if (by['interaction']) parts.push(`${by['interaction']} fire${s(by['interaction'])} on interaction`);
+    if (by['other-pages']) parts.push(`${by['other-pages']} target${s(by['other-pages'])} other pages`);
+    if (by['unknown']) parts.push(`${by['unknown']} depend${s(by['unknown'])} on values the scan cannot read`);
+    if (by['no-trigger']) parts.push(`${by['no-trigger']} ha${by['no-trigger'] === 1 ? 's' : 've'} no firing trigger`);
+    if (by['stale-audit']) parts.push(`${by['stale-audit']} not yet re-read`);
+    return `<h3>Container tags set to fire on this page</h3>
+      <p class="kv"><b>None.</b> Of the ${all.length} vendor tag${all.length === 1 ? '' : 's'} in the container${parts.length ? `, ${parts.join(', ')}` : ''}. Nothing here is missing - the container simply does not target this page.</p>`;
+  }
   const rows = groups.map(g => {
     const n = g.tags.length;
     const list = g.tags.map(t =>
-      `<li>${t.name} <span class="evidence">&mdash; ${(t.firing_triggers || []).join(', ') || 'no trigger'}</span></li>`).join('');
+      `<li>${t.name} <span class="evidence">&mdash; ${(t.firing_triggers || []).join(', ') || 'no trigger'} &middot; <b>${tagKind(t)}</b></span></li>`).join('');
     return `<li><span class="badge ${g.fired ? 'ok' : 'bad'}">${g.fired ? 'firing' : 'not seen firing'}</span>
       <div><b>${g.label}</b> <span class="evidence">${n} tag${n === 1 ? '' : 's'} set to fire on this page</span>
       <ol style="margin:4px 0 0 18px;padding:0;font-size:12.5px">${list}</ol></div></li>`;
