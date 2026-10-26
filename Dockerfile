@@ -1,6 +1,10 @@
 # Official Playwright image: Chromium + all system deps preinstalled.
-# Tag must match the playwright version in requirements.txt (1.45.0).
-FROM mcr.microsoft.com/playwright/python:v1.45.0-jammy
+# Tag must match the playwright version in requirements.txt (1.64.1).
+FROM mcr.microsoft.com/playwright/python:v1.64.1-jammy
+
+# Refresh the system CA store (Oct 2026 eMudhra intermediate compromise).
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
